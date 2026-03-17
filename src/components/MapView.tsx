@@ -1,12 +1,8 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
-import Map, { Marker, Popup, NavigationControl } from "react-map-gl/maplibre";
-import mapboxgl from "mapbox-gl";
+import MapGL, { Marker, Popup, NavigationControl } from "react-map-gl/mapbox";
 import { Business } from "@/lib/types";
-
-// Use react-map-gl with actual Mapbox GL JS when token is available
-import MapGL from "react-map-gl";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
 

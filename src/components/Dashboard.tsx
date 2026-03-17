@@ -1,8 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Business } from "@/lib/types";
 import { fetchStats, ApiStats } from "@/lib/api";
+import MapGL, { Marker, NavigationControl } from "react-map-gl/mapbox";
+
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
 
 interface DashboardProps {
   businesses: Business[];
@@ -394,28 +397,32 @@ function StatCard({
 }
 
 // ── Overview Map ─────────────────────────────────────────────
-// Shows all geocoded businesses as color-coded pins on a real
-// satellite map using Google Maps Static API.
-// Falls back to a styled placeholder if no API key is set.
+// Interactive Mapbox satellite map with color-coded business pins.
+// Falls back to a styled placeholder if no Mapbox token is set.
+const STATUS_PIN_COLORS: Record<string, string> = {
+  confirmed: "#10b981",
+  review: "#f59e0b",
+  clear: "#94a3b8",
+  pending: "#22d3ee",
+};
+
 function OverviewMap({ businesses }: { businesses: Business[] }) {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
-
-  const pinColor = (status: string) => {
-    if (status === "confirmed") return "0x2ED573";
-    if (status === "review")    return "0xFFD43B";
-    if (status === "clear")     return "0xFF4757";
-    return "0x22D3EE"; // pending
-  };
-
   const located = businesses.filter((b) => b.lat && b.lng);
 
-  if (!apiKey || located.length === 0) {
+  const center = useMemo(() => {
+    if (located.length === 0) return { lat: 33.45, lng: -111.94 };
+    const avgLat = located.reduce((s, b) => s + b.lat!, 0) / located.length;
+    const avgLng = located.reduce((s, b) => s + b.lng!, 0) / located.length;
+    return { lat: avgLat, lng: avgLng };
+  }, [located]);
+
+  if (!MAPBOX_TOKEN || located.length === 0) {
     return (
       <div className="bg-white rounded-xl border border-ice-200 overflow-hidden shadow-sm">
         <div className="px-5 py-4 border-b border-ice-200 flex items-center justify-between">
           <h3 className="text-sm font-semibold text-navy-950">Overview Map</h3>
           <span className="text-xs text-steel-400">
-            {!apiKey ? "Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to .env.local to enable" : "No geocoded businesses yet"}
+            {!MAPBOX_TOKEN ? "Add NEXT_PUBLIC_MAPBOX_TOKEN to .env.local to enable" : "No geocoded businesses yet"}
           </span>
         </div>
         <div className="bg-slate-100 h-52 flex items-center justify-center">
@@ -424,15 +431,6 @@ function OverviewMap({ businesses }: { businesses: Business[] }) {
       </div>
     );
   }
-
-  // Build markers string for Static API
-  const markers = located.map((b) =>
-    `markers=color:${pinColor(b.status ?? "pending")}|label:C|${b.lat},${b.lng}`
-  ).join("&");
-
-  // Auto-center on first business
-  const center = `${located[0].lat},${located[0].lng}`;
-  const src = `https://maps.googleapis.com/maps/api/staticmap?center=${center}&zoom=11&size=900x220&scale=2&maptype=satellite&${markers}&key=${apiKey}`;
 
   return (
     <div className="bg-white rounded-xl border border-ice-200 overflow-hidden shadow-sm">
@@ -451,12 +449,30 @@ function OverviewMap({ businesses }: { businesses: Business[] }) {
           <span className="text-steel-300">{located.length} sites plotted</span>
         </div>
       </div>
-      <img
-        src={src}
-        alt="Overview map of scanned businesses"
-        className="w-full object-cover"
-        style={{ height: 220 }}
-      />
+      <div style={{ height: 220 }}>
+        <MapGL
+          initialViewState={{ latitude: center.lat, longitude: center.lng, zoom: 10 }}
+          mapboxAccessToken={MAPBOX_TOKEN}
+          mapStyle="mapbox://styles/mapbox/satellite-streets-v12"
+          style={{ width: "100%", height: "100%" }}
+        >
+          <NavigationControl position="top-right" showCompass={false} />
+          {located.map((b) => (
+            <Marker key={b.id} latitude={b.lat!} longitude={b.lng!} anchor="bottom">
+              <svg width="20" height="26" viewBox="0 0 20 26">
+                <path
+                  d="M10 0C4.477 0 0 4.477 0 10c0 7.5 10 16 10 16s10-8.5 10-16C20 4.477 15.523 0 10 0z"
+                  fill={STATUS_PIN_COLORS[b.status ?? "pending"]}
+                />
+                <circle cx="10" cy="9" r="4" fill="white" fillOpacity="0.9" />
+                <text x="10" y="12" textAnchor="middle" fill={STATUS_PIN_COLORS[b.status ?? "pending"]} fontSize="7" fontWeight="700" fontFamily="system-ui">
+                  {b.containersDetected ?? 0}
+                </text>
+              </svg>
+            </Marker>
+          ))}
+        </MapGL>
+      </div>
     </div>
   );
 }
