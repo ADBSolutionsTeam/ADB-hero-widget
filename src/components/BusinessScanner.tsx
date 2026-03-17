@@ -5,6 +5,7 @@ import { Business, ProcessingStage } from "@/lib/types";
 import { parseCSV, processBusinesses, exportToCSV, SAMPLE_BUSINESSES } from "@/lib/mock-data";
 import { uploadCSV, startScan, pollUntilDone, fetchLocations, downloadExport, PipelineStatus } from "@/lib/api";
 import DetectionViewer from "./DetectionViewer";
+import ExportMenu from "./ExportMenu";
 
 interface BusinessScannerProps {
   businesses: Business[];
@@ -36,7 +37,7 @@ export default function BusinessScanner({
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
   const [filter, setFilter] = useState<string>("all");
   const [dragOver, setDragOver] = useState(false);
-  const [showExportToast, setShowExportToast] = useState(false);
+
   const [apiError, setApiError] = useState<string | null>(null);
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -147,32 +148,7 @@ export default function BusinessScanner({
     processFile(SAMPLE_BUSINESSES);
   }, [processFile]);
 
-  const handleExport = useCallback(async () => {
-    try {
-      // Try real backend export first
-      const blob = await downloadExport();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const date = new Date().toISOString().split("T")[0];
-      a.download = `container-hunter-results-${date}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      // Fall back to client-side export from current results
-      const csv = exportToCSV(businesses);
-      const blob = new Blob([csv], { type: "text/csv" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const date = new Date().toISOString().split("T")[0];
-      a.download = `container-hunter-results-${date}.csv`;
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-    setShowExportToast(true);
-    setTimeout(() => setShowExportToast(false), 3000);
-  }, [businesses]);
+  // Export is now handled by ExportMenu component
 
   const filteredBusinesses =
     filter === "all"
@@ -383,16 +359,6 @@ export default function BusinessScanner({
   // Results View
   return (
     <div className="space-y-4">
-      {/* Export Toast */}
-      {showExportToast && (
-        <div className="fixed top-6 right-6 bg-navy-950 text-white px-5 py-3 rounded-xl shadow-xl flex items-center gap-3 z-50 animate-slide-in">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#10b981" strokeWidth="2.5">
-            <polyline points="20 6 9 17 4 12" />
-          </svg>
-          <span className="text-sm font-medium">Results exported successfully</span>
-        </div>
-      )}
-
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -412,17 +378,7 @@ export default function BusinessScanner({
           >
             New Scan
           </button>
-          <button
-            onClick={handleExport}
-            className="bg-navy-950 text-white px-4 py-2 rounded-lg text-sm font-semibold hover:bg-navy-800 transition-colors flex items-center gap-2"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
-              <polyline points="7 10 12 15 17 10" />
-              <line x1="12" y1="15" x2="12" y2="3" />
-            </svg>
-            Export CSV
-          </button>
+          <ExportMenu businesses={businesses} reportTitle="Container Detection Report" />
         </div>
       </div>
 
