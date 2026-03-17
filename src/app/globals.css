@@ -46,3 +46,21 @@ body {
 .animate-pulse-slow {
   animation: pulse-slow 2s ease-in-out infinite;
 }
+
+@keyframes slide-in {
+  0% { transform: translateX(100%); opacity: 0; }
+  100% { transform: translateX(0); opacity: 1; }
+}
+
+.animate-slide-in {
+  animation: slide-in 0.3s ease-out;
+}
+
+/* Smooth transitions for table rows */
+tr { transition: background-color 0.15s ease; }
+
+/* Better focus styles */
+button:focus-visible {
+  outline: 2px solid #C7A39B;
+  outline-offset: 2px;
+}

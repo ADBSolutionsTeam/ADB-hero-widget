@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { Business } from "@/lib/types";
 
 interface DashboardProps {
@@ -28,32 +29,67 @@ export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
   return (
     <div className="space-y-6">
       {/* Hero Section */}
-      <div className="bg-navy-950 rounded-2xl p-8 text-white">
-        <div className="flex items-start justify-between">
+      <div className="relative bg-navy-950 rounded-2xl p-8 text-white overflow-hidden">
+        {/* Subtle grid pattern */}
+        <div
+          className="absolute inset-0 opacity-[0.03]"
+          style={{
+            backgroundImage:
+              "linear-gradient(#C7A39B 1px, transparent 1px), linear-gradient(90deg, #C7A39B 1px, transparent 1px)",
+            backgroundSize: "40px 40px",
+          }}
+        />
+        {/* Gradient overlay */}
+        <div className="absolute top-0 right-0 w-96 h-96 bg-blush-400/5 rounded-full blur-3xl" />
+
+        <div className="relative flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold mb-2">Container Hunter</h1>
-            <p className="text-steel-400 text-sm max-w-lg">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-xl bg-blush-400/20 flex items-center justify-center">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#C7A39B" strokeWidth="2">
+                  <rect x="2" y="6" width="20" height="12" rx="1" />
+                  <line x1="7" y1="6" x2="7" y2="18" />
+                  <line x1="17" y1="6" x2="17" y2="18" />
+                </svg>
+              </div>
+              <h1 className="text-2xl font-bold">Container Hunter</h1>
+            </div>
+            <p className="text-steel-400 text-sm max-w-lg leading-relaxed">
               AI-powered geospatial intelligence for the container rental
-              industry. Find what others miss.
+              industry. Detect containers, identify construction activity, and
+              generate qualified leads — automatically.
+            </p>
+            <p className="text-blush-400 text-xs font-medium mt-2 tracking-wide">
+              Find what others miss.
             </p>
           </div>
-          <div className="flex items-center gap-2 bg-navy-800 px-3 py-1.5 rounded-full">
-            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse-slow" />
-            <span className="text-xs text-steel-400">System Online</span>
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2 bg-navy-800/80 px-3 py-1.5 rounded-full backdrop-blur-sm">
+              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse-slow" />
+              <span className="text-xs text-steel-400">System Online</span>
+            </div>
+            {hasData && (
+              <div className="flex items-center gap-2 bg-navy-800/80 px-3 py-1.5 rounded-full backdrop-blur-sm">
+                <span className="w-2 h-2 rounded-full bg-blush-400" />
+                <span className="text-xs text-steel-400">
+                  {processed.length} sites analyzed
+                </span>
+              </div>
+            )}
           </div>
         </div>
 
         {!hasData && (
-          <div className="mt-8 flex gap-4">
+          <div className="relative mt-8 flex gap-4">
             <button
               onClick={() => onNavigate("scanner")}
-              className="bg-blush-400 text-navy-950 px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-blush-300 transition-colors"
+              className="bg-blush-400 text-navy-950 px-6 py-3 rounded-lg text-sm font-semibold hover:bg-blush-300 transition-all hover:shadow-lg hover:shadow-blush-400/20"
             >
               Launch Business Scanner
             </button>
             <button
               onClick={() => onNavigate("construction")}
-              className="border border-navy-600 text-steel-400 px-5 py-2.5 rounded-lg text-sm hover:border-blush-400 hover:text-blush-400 transition-colors"
+              className="border border-navy-600 text-steel-400 px-6 py-3 rounded-lg text-sm hover:border-blush-400 hover:text-blush-400 transition-colors"
             >
               Construction Intelligence
             </button>
@@ -66,27 +102,49 @@ export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
         <StatCard
           label="Businesses Scanned"
           value={processed.length}
+          total={businesses.length}
           subtitle={`of ${businesses.length} uploaded`}
-          color="bg-navy-800"
+          icon={
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8FA3BD" strokeWidth="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z" />
+              <path d="M2 17l10 5 10-5" />
+              <path d="M2 12l10 5 10-5" />
+            </svg>
+          }
         />
         <StatCard
           label="Containers Detected"
           value={totalContainers}
           subtitle="across all sites"
-          color="bg-navy-800"
+          icon={
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8FA3BD" strokeWidth="2">
+              <rect x="2" y="6" width="20" height="12" rx="1" />
+              <line x1="7" y1="6" x2="7" y2="18" />
+              <line x1="17" y1="6" x2="17" y2="18" />
+            </svg>
+          }
         />
         <StatCard
           label="Confirmed Leads"
           value={confirmed.length}
           subtitle={`${review.length} needs review`}
-          color="bg-navy-800"
           accent
+          icon={
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C7A39B" strokeWidth="2">
+              <path d="M22 11.08V12a10 10 0 11-5.93-9.14" />
+              <polyline points="22 4 12 14.01 9 11.01" />
+            </svg>
+          }
         />
         <StatCard
           label="Avg Opportunity Score"
           value={avgOpportunity}
           subtitle="out of 100"
-          color="bg-navy-800"
+          icon={
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#8FA3BD" strokeWidth="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+            </svg>
+          }
         />
       </div>
 
@@ -95,23 +153,39 @@ export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
         <div className="grid grid-cols-2 gap-4">
           <div
             onClick={() => onNavigate("scanner")}
-            className="bg-white rounded-xl p-6 border border-ice-200 cursor-pointer hover:border-blush-400 transition-colors group"
+            className="bg-white rounded-xl p-6 border border-ice-200 cursor-pointer hover:border-blush-400 transition-all hover:shadow-md group"
           >
-            <h3 className="font-semibold text-navy-950 mb-1 group-hover:text-blush-400 transition-colors">
-              Business Scanner Results
-            </h3>
-            <p className="text-sm text-steel-500">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-ice-100 flex items-center justify-center group-hover:bg-blush-400/10 transition-colors">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8FA3BD" strokeWidth="2">
+                  <circle cx="11" cy="11" r="8" />
+                  <path d="M21 21l-4.35-4.35" />
+                </svg>
+              </div>
+              <h3 className="font-semibold text-navy-950 group-hover:text-blush-400 transition-colors">
+                Business Scanner Results
+              </h3>
+            </div>
+            <p className="text-sm text-steel-500 ml-11">
               View detection results, satellite imagery, and export leads
             </p>
           </div>
           <div
             onClick={() => onNavigate("construction")}
-            className="bg-white rounded-xl p-6 border border-ice-200 cursor-pointer hover:border-blush-400 transition-colors group"
+            className="bg-white rounded-xl p-6 border border-ice-200 cursor-pointer hover:border-blush-400 transition-all hover:shadow-md group"
           >
-            <h3 className="font-semibold text-navy-950 mb-1 group-hover:text-blush-400 transition-colors">
-              Construction Intelligence
-            </h3>
-            <p className="text-sm text-steel-500">
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-ice-100 flex items-center justify-center group-hover:bg-blush-400/10 transition-colors">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8FA3BD" strokeWidth="2">
+                  <path d="M2 20h20" />
+                  <path d="M5 20V8l7-5 7 5v12" />
+                </svg>
+              </div>
+              <h3 className="font-semibold text-navy-950 group-hover:text-blush-400 transition-colors">
+                Construction Intelligence
+              </h3>
+            </div>
+            <p className="text-sm text-steel-500 ml-11">
               View construction activity scores and opportunity rankings
             </p>
           </div>
@@ -121,26 +195,42 @@ export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
       {/* Top Leads */}
       {hasData && (
         <div className="bg-white rounded-xl border border-ice-200 overflow-hidden">
-          <div className="px-6 py-4 border-b border-ice-200">
-            <h3 className="font-semibold text-navy-950">Top Leads</h3>
+          <div className="px-6 py-4 border-b border-ice-200 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-navy-950">Top Leads</h3>
+              <span className="text-[10px] bg-blush-400/15 text-blush-400 px-2 py-0.5 rounded-full font-medium">
+                {businesses.filter((b) => (b.containersDetected ?? 0) > 0).length} leads
+              </span>
+            </div>
+            <button
+              onClick={() => onNavigate("scanner")}
+              className="text-xs text-blush-400 hover:text-navy-950 font-medium transition-colors"
+            >
+              View All
+            </button>
           </div>
           <div className="divide-y divide-ice-200">
             {businesses
               .filter((b) => (b.containersDetected ?? 0) > 0)
               .sort((a, b) => (b.opportunityScore ?? 0) - (a.opportunityScore ?? 0))
               .slice(0, 5)
-              .map((biz) => (
+              .map((biz, index) => (
                 <div
                   key={biz.id}
-                  className="px-6 py-3 flex items-center justify-between"
+                  className="px-6 py-3.5 flex items-center justify-between hover:bg-ice-100/50 transition-colors"
                 >
-                  <div>
-                    <p className="font-medium text-sm text-navy-950">
-                      {biz.name}
-                    </p>
-                    <p className="text-xs text-steel-500">
-                      {biz.address}, {biz.city}
-                    </p>
+                  <div className="flex items-center gap-3">
+                    <span className="w-6 h-6 rounded-full bg-ice-100 flex items-center justify-center text-xs font-bold text-steel-500">
+                      {index + 1}
+                    </span>
+                    <div>
+                      <p className="font-medium text-sm text-navy-950">
+                        {biz.name}
+                      </p>
+                      <p className="text-xs text-steel-500">
+                        {biz.address}, {biz.city}
+                      </p>
+                    </div>
                   </div>
                   <div className="flex items-center gap-4">
                     <div className="text-right">
@@ -151,11 +241,84 @@ export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
                         {Math.round((biz.confidence ?? 0) * 100)}% confidence
                       </p>
                     </div>
+                    <div className="text-right">
+                      <p className="text-xs text-steel-400">Opportunity</p>
+                      <p className={`text-sm font-bold ${
+                        (biz.opportunityScore ?? 0) >= 70
+                          ? "text-emerald-600"
+                          : (biz.opportunityScore ?? 0) >= 40
+                          ? "text-amber-600"
+                          : "text-steel-500"
+                      }`}>
+                        {biz.opportunityScore}
+                      </p>
+                    </div>
                     <StatusBadge status={biz.status ?? "pending"} />
                   </div>
                 </div>
               ))}
           </div>
+        </div>
+      )}
+
+      {/* Empty State — Pipeline Overview */}
+      {!hasData && (
+        <div className="grid grid-cols-3 gap-4">
+          {[
+            {
+              step: "1",
+              title: "Upload Business List",
+              desc: "Import a CSV of target businesses with addresses",
+              icon: (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8FA3BD" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+              ),
+            },
+            {
+              step: "2",
+              title: "AI Detection",
+              desc: "Satellite imagery analyzed for containers and construction",
+              icon: (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8FA3BD" strokeWidth="2">
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42" />
+                </svg>
+              ),
+            },
+            {
+              step: "3",
+              title: "Export Leads",
+              desc: "Download qualified leads ranked by opportunity score",
+              icon: (
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8FA3BD" strokeWidth="2">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+              ),
+            },
+          ].map((item) => (
+            <div
+              key={item.step}
+              className="bg-white rounded-xl border border-ice-200 p-6"
+            >
+              <div className="flex items-center gap-3 mb-3">
+                <span className="w-7 h-7 rounded-full bg-navy-950 text-white flex items-center justify-center text-xs font-bold">
+                  {item.step}
+                </span>
+                {item.icon}
+              </div>
+              <h4 className="font-semibold text-navy-950 text-sm mb-1">
+                {item.title}
+              </h4>
+              <p className="text-xs text-steel-500 leading-relaxed">
+                {item.desc}
+              </p>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -165,21 +328,48 @@ export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
 function StatCard({
   label,
   value,
+  total,
   subtitle,
-  color,
   accent,
+  icon,
 }: {
   label: string;
   value: number;
+  total?: number;
   subtitle: string;
-  color: string;
   accent?: boolean;
+  icon: React.ReactNode;
 }) {
+  const [display, setDisplay] = useState(0);
+
+  useEffect(() => {
+    if (value === 0) {
+      setDisplay(0);
+      return;
+    }
+    let start = 0;
+    const duration = 600;
+    const step = Math.max(1, Math.floor(value / (duration / 16)));
+    const timer = setInterval(() => {
+      start += step;
+      if (start >= value) {
+        setDisplay(value);
+        clearInterval(timer);
+      } else {
+        setDisplay(start);
+      }
+    }, 16);
+    return () => clearInterval(timer);
+  }, [value]);
+
   return (
-    <div className={`${color} rounded-xl p-5 text-white`}>
+    <div className="bg-navy-800 rounded-xl p-5 text-white relative overflow-hidden group hover:bg-navy-700 transition-colors">
+      <div className="absolute top-3 right-3 opacity-30 group-hover:opacity-50 transition-opacity">
+        {icon}
+      </div>
       <p className="text-xs text-steel-400 mb-1">{label}</p>
-      <p className={`text-3xl font-bold ${accent ? "text-blush-400" : ""}`}>
-        {value}
+      <p className={`text-3xl font-bold tabular-nums ${accent ? "text-blush-400" : ""}`}>
+        {display}
       </p>
       <p className="text-xs text-steel-500 mt-1">{subtitle}</p>
     </div>
@@ -196,7 +386,7 @@ function StatusBadge({ status }: { status: string }) {
 
   return (
     <span
-      className={`text-xs px-2.5 py-1 rounded-full font-medium ${
+      className={`text-xs px-2.5 py-1 rounded-full font-medium capitalize ${
         styles[status] ?? styles.pending
       }`}
     >
