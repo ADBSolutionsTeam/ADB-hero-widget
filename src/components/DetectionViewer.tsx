@@ -83,10 +83,9 @@ export default function DetectionViewer({
             </div>
           </div>
 
-          {/* Simulated satellite view */}
+          {/* Satellite view — real imagery via Google Maps Static API */}
           <div className="relative bg-slate-800 w-full overflow-hidden" style={{ height: 440 }}>
-            {/* Simulated satellite base */}
-            <SatelliteBackground seed={business.name} />
+            <SatelliteBackground seed={business.name} lat={business.lat} lng={business.lng} />
 
             {/* Detection Overlays */}
             {(business.containerDetails ?? []).map((detection, i) => {
@@ -173,7 +172,9 @@ export default function DetectionViewer({
                 <p className="opacity-50">Zoom: 18 | Resolution: 0.3m/px</p>
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-[10px] text-white/50">Imagery source: Simulated</span>
+                <span className="text-[10px] text-white/50">
+                  {business.lat ? "Imagery: Google Maps Satellite" : "Imagery: Simulated"}
+                </span>
               </div>
             </div>
           </div>
@@ -386,7 +387,23 @@ function StatusBadgeLarge({ status }: { status: string }) {
   );
 }
 
-function SatelliteBackground({ seed }: { seed: string }) {
+function SatelliteBackground({ seed, lat, lng }: { seed: string; lat?: number; lng?: number }) {
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  // If we have real coordinates + API key, show Google Maps satellite imagery
+  if (lat && lng && apiKey) {
+    const src = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=19&size=640x440&maptype=satellite&scale=2&key=${apiKey}`;
+    return (
+      <img
+        src={src}
+        alt="Satellite view"
+        className="absolute inset-0 w-full h-full object-cover"
+        style={{ imageRendering: "crisp-edges" }}
+      />
+    );
+  }
+
+  // Fallback: procedural mock satellite (no API key or no coordinates)
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
     hash = (hash << 5) - hash + seed.charCodeAt(i);

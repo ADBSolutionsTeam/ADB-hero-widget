@@ -160,6 +160,11 @@ export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
         />
       </div>
 
+      {/* Overview Map — real satellite pins when API key is set */}
+      {hasData && businesses.some((b) => b.lat && b.lng) && (
+        <OverviewMap businesses={businesses} />
+      )}
+
       {/* Quick Actions */}
       {hasData && (
         <div className="grid grid-cols-2 gap-4">
@@ -384,6 +389,74 @@ function StatCard({
         {display}
       </p>
       <p className="text-xs text-steel-500 mt-1">{subtitle}</p>
+    </div>
+  );
+}
+
+// ── Overview Map ─────────────────────────────────────────────
+// Shows all geocoded businesses as color-coded pins on a real
+// satellite map using Google Maps Static API.
+// Falls back to a styled placeholder if no API key is set.
+function OverviewMap({ businesses }: { businesses: Business[] }) {
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+
+  const pinColor = (status: string) => {
+    if (status === "confirmed") return "0x2ED573";
+    if (status === "review")    return "0xFFD43B";
+    if (status === "clear")     return "0xFF4757";
+    return "0x22D3EE"; // pending
+  };
+
+  const located = businesses.filter((b) => b.lat && b.lng);
+
+  if (!apiKey || located.length === 0) {
+    return (
+      <div className="bg-white rounded-xl border border-ice-200 overflow-hidden shadow-sm">
+        <div className="px-5 py-4 border-b border-ice-200 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-navy-950">Overview Map</h3>
+          <span className="text-xs text-steel-400">
+            {!apiKey ? "Add NEXT_PUBLIC_GOOGLE_MAPS_API_KEY to .env.local to enable" : "No geocoded businesses yet"}
+          </span>
+        </div>
+        <div className="bg-slate-100 h-52 flex items-center justify-center">
+          <p className="text-sm text-steel-400">Map unavailable</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Build markers string for Static API
+  const markers = located.map((b) =>
+    `markers=color:${pinColor(b.status ?? "pending")}|label:C|${b.lat},${b.lng}`
+  ).join("&");
+
+  // Auto-center on first business
+  const center = `${located[0].lat},${located[0].lng}`;
+  const src = `https://maps.googleapis.com/maps/api/staticmap?center=${center}&zoom=11&size=900x220&scale=2&maptype=satellite&${markers}&key=${apiKey}`;
+
+  return (
+    <div className="bg-white rounded-xl border border-ice-200 overflow-hidden shadow-sm">
+      <div className="px-5 py-4 border-b border-ice-200 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-navy-950">Overview Map</h3>
+        <div className="flex items-center gap-4 text-xs text-steel-400">
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" /> Confirmed
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" /> Review
+          </span>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2.5 h-2.5 rounded-full bg-cyan-500 inline-block" /> Pending
+          </span>
+          <span className="text-steel-300">{located.length} sites plotted</span>
+        </div>
+      </div>
+      <img
+        src={src}
+        alt="Overview map of scanned businesses"
+        className="w-full object-cover"
+        style={{ height: 220 }}
+      />
     </div>
   );
 }
