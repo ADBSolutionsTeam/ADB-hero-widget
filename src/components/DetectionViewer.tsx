@@ -2,6 +2,9 @@
 
 import { useState } from "react";
 import { Business } from "@/lib/types";
+import Map, { Marker, NavigationControl } from "react-map-gl/mapbox";
+
+const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
 
 interface DetectionViewerProps {
   business: Business;
@@ -83,9 +86,13 @@ export default function DetectionViewer({
             </div>
           </div>
 
-          {/* Satellite view — real imagery via Google Maps Static API */}
+          {/* Satellite view — Mapbox or simulated */}
           <div className="relative bg-slate-800 w-full overflow-hidden" style={{ height: 440 }}>
-            <SatelliteBackground seed={business.name} lat={business.lat} lng={business.lng} />
+            {MAPBOX_TOKEN && business.lat && business.lng ? (
+              <SatelliteMap lat={business.lat} lng={business.lng} />
+            ) : (
+              <SatelliteBackground seed={business.name} />
+            )}
 
             {/* Detection Overlays */}
             {(business.containerDetails ?? []).map((detection, i) => {
@@ -173,7 +180,7 @@ export default function DetectionViewer({
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] text-white/50">
-                  {business.lat ? "Imagery: Google Maps Satellite" : "Imagery: Simulated"}
+                  {MAPBOX_TOKEN && business.lat ? "Imagery: Mapbox Satellite" : "Imagery: Simulated"}
                 </span>
               </div>
             </div>
@@ -387,23 +394,26 @@ function StatusBadgeLarge({ status }: { status: string }) {
   );
 }
 
-function SatelliteBackground({ seed, lat, lng }: { seed: string; lat?: number; lng?: number }) {
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+function SatelliteMap({ lat, lng }: { lat: number; lng: number }) {
+  return (
+    <Map
+      initialViewState={{ latitude: lat, longitude: lng, zoom: 18, pitch: 0 }}
+      mapboxAccessToken={MAPBOX_TOKEN}
+      mapStyle="mapbox://styles/mapbox/satellite-v9"
+      style={{ width: "100%", height: "100%" }}
+      interactive={true}
+      dragRotate={false}
+      attributionControl={false}
+    >
+      <NavigationControl position="top-right" showCompass={false} />
+      <Marker latitude={lat} longitude={lng} anchor="center">
+        <div className="w-4 h-4 rounded-full border-2 border-white bg-blush-400 shadow-lg animate-pulse" />
+      </Marker>
+    </Map>
+  );
+}
 
-  // If we have real coordinates + API key, show Google Maps satellite imagery
-  if (lat && lng && apiKey) {
-    const src = `https://maps.googleapis.com/maps/api/staticmap?center=${lat},${lng}&zoom=19&size=640x440&maptype=satellite&scale=2&key=${apiKey}`;
-    return (
-      <img
-        src={src}
-        alt="Satellite view"
-        className="absolute inset-0 w-full h-full object-cover"
-        style={{ imageRendering: "crisp-edges" }}
-      />
-    );
-  }
-
-  // Fallback: procedural mock satellite (no API key or no coordinates)
+function SatelliteBackground({ seed }: { seed: string }) {
   let hash = 0;
   for (let i = 0; i < seed.length; i++) {
     hash = (hash << 5) - hash + seed.charCodeAt(i);
