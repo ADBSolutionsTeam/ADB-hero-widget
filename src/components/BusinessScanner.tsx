@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef } from "react";
 import { Business, ProcessingStage } from "@/lib/types";
-import { parseCSV, processBusinesses, exportToCSV, SAMPLE_BUSINESSES } from "@/lib/mock-data";
-import { uploadCSV, startScan, pollUntilDone, fetchLocations, downloadExport, PipelineStatus } from "@/lib/api";
+import { processBusinesses, SAMPLE_BUSINESSES } from "@/lib/mock-data";
+import { uploadCSV, startScan, pollUntilDone, fetchLocations, PipelineStatus } from "@/lib/api";
 import DetectionViewer from "./DetectionViewer";
 import ExportMenu from "./ExportMenu";
+import FilterBar, { useBusinessFilters } from "./FilterBar";
 
 interface BusinessScannerProps {
   businesses: Business[];
@@ -35,21 +36,14 @@ export default function BusinessScanner({
 }: BusinessScannerProps) {
   const [stage, setStage] = useState<ProcessingStage>("idle");
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
-  const [filter, setFilter] = useState<string>("all");
   const [dragOver, setDragOver] = useState(false);
 
   const [apiError, setApiError] = useState<string | null>(null);
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const filterCounts = useMemo(() => {
-    return {
-      all: businesses.length,
-      confirmed: businesses.filter((b) => b.status === "confirmed").length,
-      review: businesses.filter((b) => b.status === "review").length,
-      clear: businesses.filter((b) => b.status === "clear").length,
-    };
-  }, [businesses]);
+  const { filters, updateFilter, resetFilters, filtered: filteredBusinesses, isFiltered, counts } =
+    useBusinessFilters(businesses);
 
   /** Real pipeline: upload CSV → geocode → scan → load results */
   const processFileReal = useCallback(
@@ -149,11 +143,6 @@ export default function BusinessScanner({
   }, [processFile]);
 
   // Export is now handled by ExportMenu component
-
-  const filteredBusinesses =
-    filter === "all"
-      ? businesses
-      : businesses.filter((b) => b.status === filter);
 
   const isProcessing = stage !== "idle" && stage !== "complete";
 
@@ -382,36 +371,15 @@ export default function BusinessScanner({
         </div>
       </div>
 
-      {/* Filters with counts */}
-      <div className="flex gap-2">
-        {([
-          { key: "all", label: "All" },
-          { key: "confirmed", label: "Confirmed" },
-          { key: "review", label: "Needs Review" },
-          { key: "clear", label: "Clear" },
-        ] as const).map((f) => (
-          <button
-            key={f.key}
-            onClick={() => setFilter(f.key)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
-              filter === f.key
-                ? "bg-navy-950 text-white"
-                : "bg-white text-steel-600 border border-ice-200 hover:border-navy-800"
-            }`}
-          >
-            {f.label}
-            <span
-              className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                filter === f.key
-                  ? "bg-white/20"
-                  : "bg-ice-100"
-              }`}
-            >
-              {filterCounts[f.key]}
-            </span>
-          </button>
-        ))}
-      </div>
+      {/* Filters */}
+      <FilterBar
+        filters={filters}
+        updateFilter={updateFilter}
+        resetFilters={resetFilters}
+        isFiltered={isFiltered}
+        counts={counts}
+        totalFiltered={filteredBusinesses.length}
+      />
 
       {/* Results Table */}
       <div className="bg-white rounded-xl border border-ice-200 overflow-hidden shadow-sm">

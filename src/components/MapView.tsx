@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback } from "react";
 import MapGL, { Marker, Popup, NavigationControl } from "react-map-gl/mapbox";
 import { Business } from "@/lib/types";
+import FilterBar, { useBusinessFilters } from "./FilterBar";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
 
@@ -22,22 +23,31 @@ const STATUS_COLORS: Record<string, string> = {
 export default function MapView({ businesses, onSelectBusiness }: MapViewProps) {
   const [popupBusiness, setPopupBusiness] = useState<Business | null>(null);
 
+  const { filters, updateFilter, resetFilters, filtered, isFiltered, counts } =
+    useBusinessFilters(businesses);
+
   const geoBusinesses = useMemo(
+    () => filtered.filter((b) => b.lat && b.lng),
+    [filtered]
+  );
+
+  // Use all geo businesses for initial bounds (not just filtered)
+  const allGeoBusinesses = useMemo(
     () => businesses.filter((b) => b.lat && b.lng),
     [businesses]
   );
 
   const bounds = useMemo(() => {
-    if (geoBusinesses.length === 0) return null;
+    if (allGeoBusinesses.length === 0) return null;
     let minLat = Infinity, maxLat = -Infinity, minLng = Infinity, maxLng = -Infinity;
-    for (const b of geoBusinesses) {
+    for (const b of allGeoBusinesses) {
       if (b.lat! < minLat) minLat = b.lat!;
       if (b.lat! > maxLat) maxLat = b.lat!;
       if (b.lng! < minLng) minLng = b.lng!;
       if (b.lng! > maxLng) maxLng = b.lng!;
     }
     return { minLat, maxLat, minLng, maxLng };
-  }, [geoBusinesses]);
+  }, [allGeoBusinesses]);
 
   const initialViewState = useMemo(() => {
     if (!bounds) {
@@ -55,7 +65,7 @@ export default function MapView({ businesses, onSelectBusiness }: MapViewProps) 
     setPopupBusiness(b);
   }, []);
 
-  // Summary stats
+  // Summary stats (from filtered set)
   const confirmed = geoBusinesses.filter((b) => b.status === "confirmed").length;
   const review = geoBusinesses.filter((b) => b.status === "review").length;
   const clear = geoBusinesses.filter((b) => b.status === "clear").length;
@@ -110,15 +120,15 @@ export default function MapView({ businesses, onSelectBusiness }: MapViewProps) 
         <div className="flex items-center gap-4 text-xs text-steel-500">
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" />
-            Confirmed ({confirmed})
+            Confirmed
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-amber-500 inline-block" />
-            Review ({review})
+            Review
           </span>
           <span className="flex items-center gap-1.5">
             <span className="w-3 h-3 rounded-full bg-slate-400 inline-block" />
-            Clear ({clear})
+            Clear
           </span>
         </div>
       </div>
@@ -130,6 +140,17 @@ export default function MapView({ businesses, onSelectBusiness }: MapViewProps) 
         <SummaryCard label="Confirmed Leads" value={String(confirmed)} color="text-emerald-600" />
         <SummaryCard label="Needs Review" value={String(review)} color="text-amber-600" />
       </div>
+
+      {/* Filters */}
+      <FilterBar
+        filters={filters}
+        updateFilter={updateFilter}
+        resetFilters={resetFilters}
+        isFiltered={isFiltered}
+        counts={counts}
+        totalFiltered={geoBusinesses.length}
+        compact
+      />
 
       {/* Map */}
       <div className="bg-white rounded-xl border border-ice-200 shadow-sm overflow-hidden">
