@@ -3,6 +3,7 @@
 import { useState, useCallback, useRef, useMemo } from "react";
 import { Business, ProcessingStage } from "@/lib/types";
 import { parseCSV, processBusinesses, exportToCSV, SAMPLE_BUSINESSES } from "@/lib/mock-data";
+import { uploadCSV, startScan, pollUntilDone, fetchLocations, downloadExport, PipelineStatus } from "@/lib/api";
 import DetectionViewer from "./DetectionViewer";
 
 interface BusinessScannerProps {
@@ -36,6 +37,8 @@ export default function BusinessScanner({
   const [filter, setFilter] = useState<string>("all");
   const [dragOver, setDragOver] = useState(false);
   const [showExportToast, setShowExportToast] = useState(false);
+  const [apiError, setApiError] = useState<string | null>(null);
+  const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filterCounts = useMemo(() => {
@@ -47,20 +50,71 @@ export default function BusinessScanner({
     };
   }, [businesses]);
 
+  /** Real pipeline: upload CSV → geocode → scan → load results */
+  const processFileReal = useCallback(
+    async (file: File) => {
+      setApiError(null);
+      try {
+        // Step 1: Upload CSV to backend
+        setStage("uploading");
+        await uploadCSV(file);
+
+        // Step 2: Poll until geocoding finishes
+        setStage("geocoding");
+        await pollUntilDone((status) => {
+          setPipelineStatus(status);
+          if (!status.geocoding && status.geocode_total > 0) {
+            setStage("fetching-imagery");
+          }
+        });
+
+        // Step 3: Trigger scan batch
+        setStage("detecting");
+        await startScan(50);
+        await pollUntilDone((status) => setPipelineStatus(status));
+
+        // Step 4: Load results from backend
+        const locations = await fetchLocations();
+        const mapped: Business[] = locations.map((loc) => ({
+          id: String(loc.id),
+          name: loc.business_name,
+          address: loc.address,
+          city: "",
+          state: "",
+          zip: "",
+          lat: loc.lat,
+          lng: loc.lng,
+          containersDetected: loc.containers_detected,
+          confidence: loc.max_confidence,
+          status: loc.status === "needs_review" ? "review"
+                : loc.status === "confirmed"    ? "confirmed"
+                : loc.status === "rejected"     ? "clear"
+                : "pending",
+        }));
+
+        setBusinesses(mapped);
+        setStage("complete");
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        setApiError(msg);
+        setStage("idle");
+      }
+    },
+    [setBusinesses]
+  );
+
+  /** Demo/mock pipeline: uses mock data with simulated delays */
   const processFile = useCallback(
     async (raw: Business[]) => {
+      setApiError(null);
       setStage("uploading");
       await delay(800);
-
       setStage("geocoding");
       await delay(1200);
-
       setStage("fetching-imagery");
       await delay(1500);
-
       setStage("detecting");
       await delay(2000);
-
       const results = processBusinesses(raw);
       setBusinesses(results);
       setStage("complete");
@@ -72,18 +126,9 @@ export default function BusinessScanner({
     (e: React.ChangeEvent<HTMLInputElement>) => {
       const file = e.target.files?.[0];
       if (!file) return;
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const text = event.target?.result as string;
-        const parsed = parseCSV(text);
-        if (parsed.length > 0) {
-          processFile(parsed);
-        }
-      };
-      reader.readAsText(file);
+      processFileReal(file);
     },
-    [processFile]
+    [processFileReal]
   );
 
   const handleDrop = useCallback(
@@ -92,34 +137,39 @@ export default function BusinessScanner({
       setDragOver(false);
       const file = e.dataTransfer.files?.[0];
       if (!file || !file.name.endsWith(".csv")) return;
-
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        const text = event.target?.result as string;
-        const parsed = parseCSV(text);
-        if (parsed.length > 0) {
-          processFile(parsed);
-        }
-      };
-      reader.readAsText(file);
+      processFileReal(file);
     },
-    [processFile]
+    [processFileReal]
   );
 
+  /** Demo button still uses mock data — no backend needed */
   const handleDemo = useCallback(() => {
     processFile(SAMPLE_BUSINESSES);
   }, [processFile]);
 
-  const handleExport = useCallback(() => {
-    const csv = exportToCSV(businesses);
-    const blob = new Blob([csv], { type: "text/csv" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    const date = new Date().toISOString().split("T")[0];
-    a.download = `container-hunter-results-${date}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  const handleExport = useCallback(async () => {
+    try {
+      // Try real backend export first
+      const blob = await downloadExport();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const date = new Date().toISOString().split("T")[0];
+      a.download = `container-hunter-results-${date}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      // Fall back to client-side export from current results
+      const csv = exportToCSV(businesses);
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const date = new Date().toISOString().split("T")[0];
+      a.download = `container-hunter-results-${date}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
     setShowExportToast(true);
     setTimeout(() => setShowExportToast(false), 3000);
   }, [businesses]);
@@ -241,6 +291,20 @@ export default function BusinessScanner({
             satellite imagery
           </p>
         </div>
+
+        {/* API Error Banner */}
+        {apiError && (
+          <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2" className="mt-0.5 flex-shrink-0">
+              <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <div>
+              <p className="text-sm font-medium text-red-700">Pipeline error</p>
+              <p className="text-xs text-red-600 mt-0.5">{apiError}</p>
+              <p className="text-xs text-red-500 mt-1">Make sure the backend is running: <code className="font-mono bg-red-100 px-1 rounded">python run_web.py</code></p>
+            </div>
+          </div>
+        )}
 
         <div
           onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}

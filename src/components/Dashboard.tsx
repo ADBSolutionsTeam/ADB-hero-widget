@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Business } from "@/lib/types";
+import { fetchStats, ApiStats } from "@/lib/api";
 
 interface DashboardProps {
   businesses: Business[];
@@ -9,9 +10,20 @@ interface DashboardProps {
 }
 
 export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
+  const [liveStats, setLiveStats] = useState<ApiStats | null>(null);
+
+  // Pull live stats from backend on mount and every 30s
+  useEffect(() => {
+    const load = () => fetchStats().then(setLiveStats).catch(() => null);
+    load();
+    const interval = setInterval(load, 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Prefer live stats from API; fall back to client-side counts from prop
   const processed = businesses.filter((b) => b.status && b.status !== "pending");
-  const confirmed = businesses.filter((b) => b.status === "confirmed");
-  const review = businesses.filter((b) => b.status === "review");
+  const confirmed = liveStats?.confirmed ?? businesses.filter((b) => b.status === "confirmed").length;
+  const review = liveStats?.needs_review ?? businesses.filter((b) => b.status === "review").length;
   const totalContainers = businesses.reduce(
     (sum, b) => sum + (b.containersDetected ?? 0),
     0
@@ -24,7 +36,7 @@ export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
         )
       : 0;
 
-  const hasData = processed.length > 0;
+  const hasData = processed.length > 0 || (liveStats !== null && (liveStats.confirmed + liveStats.needs_review + liveStats.rejected) > 0);
 
   return (
     <div className="space-y-6">
