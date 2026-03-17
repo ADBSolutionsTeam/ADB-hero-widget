@@ -4,6 +4,7 @@ import { useEffect, useState, useMemo } from "react";
 import { Business } from "@/lib/types";
 import { fetchStats, ApiStats } from "@/lib/api";
 import MapGL, { Marker, NavigationControl } from "react-map-gl/mapbox";
+import DashboardAnalytics from "./DashboardAnalytics";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
 
@@ -167,6 +168,9 @@ export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
       {hasData && businesses.some((b) => b.lat && b.lng) && (
         <OverviewMap businesses={businesses} />
       )}
+
+      {/* Analytics */}
+      <DashboardAnalytics businesses={businesses} onNavigate={onNavigate} />
 
       {/* Quick Actions */}
       {hasData && (
