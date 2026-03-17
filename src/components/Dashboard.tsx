@@ -138,8 +138,8 @@ export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
         />
         <StatCard
           label="Confirmed Leads"
-          value={confirmed.length}
-          subtitle={`${review.length} needs review`}
+          value={confirmed}
+          subtitle={`${review} needs review`}
           accent
           icon={
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#C7A39B" strokeWidth="2">
