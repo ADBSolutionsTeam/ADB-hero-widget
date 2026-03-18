@@ -27,6 +27,10 @@ import {
   SCAN_STEPS,
   LocationInfo,
 } from "@/lib/area-scanner-data";
+import {
+  generateAreaScanReport,
+  generateAreaScanCSV,
+} from "@/lib/area-scan-report";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
 
@@ -678,6 +682,47 @@ export default function AreaScanner() {
               {/* Actions footer — only show when NOT in detail view */}
               {!selectedResult && (
                 <div className="px-5 py-3 border-t border-navy-700 space-y-2 flex-shrink-0">
+                  {/* Export buttons */}
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => {
+                        if (!scanArea) return;
+                        const doc = generateAreaScanReport(scanArea, results, locationInfo);
+                        const locName = locationInfo ? `${locationInfo.city}-${locationInfo.state}` : "scan";
+                        doc.save(`area-scan-${locName}-${new Date().toISOString().split("T")[0]}.pdf`);
+                      }}
+                      className="py-2 rounded-lg bg-blush-400/10 text-blush-400 text-xs font-medium hover:bg-blush-400/20 transition-all flex items-center justify-center gap-1.5"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M14 3v4a1 1 0 0 0 1 1h4" />
+                        <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2z" />
+                        <path d="M12 11v6M9 14l3 3 3-3" />
+                      </svg>
+                      PDF Report
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (!scanArea) return;
+                        const csv = generateAreaScanCSV(scanArea, results, locationInfo);
+                        const blob = new Blob([csv], { type: "text/csv" });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement("a");
+                        const locName = locationInfo ? `${locationInfo.city}-${locationInfo.state}` : "scan";
+                        a.href = url;
+                        a.download = `area-scan-${locName}-${new Date().toISOString().split("T")[0]}.csv`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="py-2 rounded-lg bg-navy-800 text-steel-400 text-xs font-medium hover:text-ice-100 hover:bg-navy-700 transition-all border border-navy-600/50 flex items-center justify-center gap-1.5"
+                    >
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <path d="M7 10l5 5 5-5" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                      CSV Export
+                    </button>
+                  </div>
                   <button
                     onClick={() => {
                       if (scanArea) {
