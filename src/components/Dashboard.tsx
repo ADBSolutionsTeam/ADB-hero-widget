@@ -109,6 +109,12 @@ export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
             >
               Construction Intelligence
             </button>
+            <button
+              onClick={() => onNavigate("area-scanner")}
+              className="border border-navy-600 text-steel-400 px-6 py-3 rounded-lg text-sm hover:border-cyan-400 hover:text-cyan-400 transition-colors"
+            >
+              Area Scanner
+            </button>
           </div>
         )}
       </div>
@@ -174,7 +180,7 @@ export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
 
       {/* Quick Actions */}
       {hasData && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           <div
             onClick={() => onNavigate("scanner")}
             className="bg-white rounded-xl p-6 border border-ice-200 cursor-pointer hover:border-blush-400 transition-all hover:shadow-md group"
@@ -187,7 +193,7 @@ export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
                 </svg>
               </div>
               <h3 className="font-semibold text-navy-950 group-hover:text-blush-400 transition-colors">
-                Business Scanner Results
+                Business Scanner
               </h3>
             </div>
             <p className="text-sm text-steel-500 ml-11">
@@ -206,11 +212,31 @@ export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
                 </svg>
               </div>
               <h3 className="font-semibold text-navy-950 group-hover:text-blush-400 transition-colors">
-                Construction Intelligence
+                Construction Intel
               </h3>
             </div>
             <p className="text-sm text-steel-500 ml-11">
               View construction activity scores and opportunity rankings
+            </p>
+          </div>
+          <div
+            onClick={() => onNavigate("area-scanner")}
+            className="bg-white rounded-xl p-6 border border-ice-200 cursor-pointer hover:border-blush-400 transition-all hover:shadow-md group"
+          >
+            <div className="flex items-center gap-3 mb-2">
+              <div className="w-8 h-8 rounded-lg bg-ice-100 flex items-center justify-center group-hover:bg-blush-400/10 transition-colors">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8FA3BD" strokeWidth="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="4 2" />
+                  <circle cx="12" cy="12" r="3" />
+                  <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+                </svg>
+              </div>
+              <h3 className="font-semibold text-navy-950 group-hover:text-blush-400 transition-colors">
+                Area Scanner
+              </h3>
+            </div>
+            <p className="text-sm text-steel-500 ml-11">
+              Scan any 3×3 mile zone for containers and construction
             </p>
           </div>
         </div>
@@ -284,6 +310,46 @@ export default function Dashboard({ businesses, onNavigate }: DashboardProps) {
           </div>
         </div>
       )}
+
+      {/* Area Scanner Feature Card — always visible */}
+      <div
+        onClick={() => onNavigate("area-scanner")}
+        className="relative bg-navy-950 rounded-xl p-6 overflow-hidden cursor-pointer group hover:shadow-lg transition-all"
+      >
+        <div className="absolute inset-0 opacity-[0.04]" style={{
+          backgroundImage: "linear-gradient(#22d3ee 1px, transparent 1px), linear-gradient(90deg, #22d3ee 1px, transparent 1px)",
+          backgroundSize: "32px 32px",
+        }} />
+        <div className="absolute top-0 right-0 w-64 h-64 bg-cyan-500/5 rounded-full blur-3xl" />
+        <div className="relative flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-xl bg-cyan-500/10 flex items-center justify-center group-hover:bg-cyan-500/20 transition-colors">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="4 2" />
+                <circle cx="12" cy="12" r="3" />
+                <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
+              </svg>
+            </div>
+            <div>
+              <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                Area Scanner
+                <span className="text-[9px] bg-cyan-500/20 text-cyan-400 px-2 py-0.5 rounded-full font-semibold uppercase tracking-wider">
+                  New
+                </span>
+              </h3>
+              <p className="text-xs text-steel-400 mt-0.5">
+                Click anywhere on the map to scan a 3×3 mile zone for containers, equipment, and construction activity
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 text-steel-400 group-hover:text-cyan-400 transition-colors">
+            <span className="text-xs font-medium">Launch Scanner</span>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M5 12h14M12 5l7 7-7 7" />
+            </svg>
+          </div>
+        </div>
+      </div>
 
       {/* Empty State — Pipeline Overview */}
       {!hasData && (
