@@ -56,6 +56,14 @@ export default function Sidebar({ activeTab, onTabChange, businesses }: SidebarP
       badgeLabel: "high opportunity",
       hasData: highOpportunity > 0,
     },
+    {
+      id: "area-scanner",
+      label: "Area Scanner",
+      icon: AreaScanIcon,
+      badge: null,
+      badgeColor: "bg-cyan-500",
+      hasData: false,
+    },
   ];
 
   return (
@@ -235,6 +243,16 @@ function ConstructionIcon({ active }: { active: boolean }) {
       <path d="M2 20h20" />
       <path d="M5 20V8l7-5 7 5v12" />
       <rect x="9" y="12" width="6" height="8" />
+    </svg>
+  );
+}
+
+function AreaScanIcon({ active }: { active: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={active ? "#C7A39B" : "currentColor"} strokeWidth="2">
+      <rect x="3" y="3" width="18" height="18" rx="2" strokeDasharray="4 2" />
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3v3M12 18v3M3 12h3M18 12h3" />
     </svg>
   );
 }

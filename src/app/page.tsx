@@ -7,6 +7,7 @@ import Dashboard from "@/components/Dashboard";
 import BusinessScanner from "@/components/BusinessScanner";
 import ConstructionIntel from "@/components/ConstructionIntel";
 import MapView from "@/components/MapView";
+import AreaScanner from "@/components/AreaScanner";
 import { geocodeBusinesses } from "@/lib/geocode";
 import {
   FilterState,
@@ -69,30 +70,34 @@ export default function Home() {
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} businesses={businesses} />
 
       <main className="flex-1 overflow-y-auto">
-        <div className="max-w-6xl mx-auto p-6">
-          {activeTab === "dashboard" && (
-            <Dashboard businesses={businesses} onNavigate={setActiveTab} />
-          )}
-          {activeTab === "scanner" && (
-            <BusinessScanner
-              businesses={businesses}
-              setBusinesses={handleSetBusinesses}
-              {...sharedFilterProps}
-            />
-          )}
-          {activeTab === "map" && (
-            <MapView
-              businesses={businesses}
-              {...sharedFilterProps}
-            />
-          )}
-          {activeTab === "construction" && (
-            <ConstructionIntel
-              businesses={businesses}
-              {...sharedFilterProps}
-            />
-          )}
-        </div>
+        {activeTab === "area-scanner" ? (
+          <AreaScanner />
+        ) : (
+          <div className="max-w-6xl mx-auto p-6">
+            {activeTab === "dashboard" && (
+              <Dashboard businesses={businesses} onNavigate={setActiveTab} />
+            )}
+            {activeTab === "scanner" && (
+              <BusinessScanner
+                businesses={businesses}
+                setBusinesses={handleSetBusinesses}
+                {...sharedFilterProps}
+              />
+            )}
+            {activeTab === "map" && (
+              <MapView
+                businesses={businesses}
+                {...sharedFilterProps}
+              />
+            )}
+            {activeTab === "construction" && (
+              <ConstructionIntel
+                businesses={businesses}
+                {...sharedFilterProps}
+              />
+            )}
+          </div>
+        )}
       </main>
     </div>
   );
