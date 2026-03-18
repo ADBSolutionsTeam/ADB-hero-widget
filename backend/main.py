@@ -9,24 +9,29 @@ import asyncio
 import csv
 import io
 import json
+import logging
 import os
 import random
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
+from pathlib import Path
 
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, Depends, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select, func, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import init_db, get_db
 from models import Business, Scan, PipelineState
+from detector import init_model, detect_containers, get_model_info, get_backend
+from imagery import fetch_satellite_image, IMAGE_WIDTH, IMAGE_HEIGHT
 
 load_dotenv()
+logger = logging.getLogger("container_hunter")
 
 MAPBOX_TOKEN = os.getenv("MAPBOX_TOKEN", "")
 AUTO_APPROVE_THRESHOLD = float(os.getenv("AUTO_APPROVE_THRESHOLD", "0.92"))
@@ -44,6 +49,9 @@ async def lifespan(app: FastAPI):
         if not row:
             db.add(PipelineState(id=1))
             await db.commit()
+    # Initialize ML detection model
+    backend = init_model()
+    logger.info(f"Detection backend: {backend}")
     yield
 
 
@@ -123,6 +131,10 @@ async def get_locations(db: AsyncSession = Depends(get_db)):
                 "status": latest_scan.status if latest_scan else biz.status,
                 "containers_detected": latest_scan.containers_detected if latest_scan else 0,
                 "max_confidence": latest_scan.max_confidence if latest_scan else 0,
+                "scan_id": latest_scan.id if latest_scan else None,
+                "has_imagery": bool(latest_scan and latest_scan.imagery_path),
+                "detection_backend": latest_scan.detection_backend if latest_scan else None,
+                "detection_details": json.loads(latest_scan.detection_details) if latest_scan and latest_scan.detection_details else [],
             }
         )
 
@@ -164,6 +176,33 @@ async def get_config():
         "auto_approve_threshold": AUTO_APPROVE_THRESHOLD,
         "confidence_threshold": CONFIDENCE_THRESHOLD,
     }
+
+
+# ── GET /api/model/status ────────────────────────────────────
+
+@app.get("/api/model/status")
+async def model_status():
+    """Return info about the active ML detection backend."""
+    return get_model_info()
+
+
+# ── GET /api/imagery/{scan_id} ───────────────────────────────
+
+@app.get("/api/imagery/{scan_id}")
+async def get_imagery(scan_id: int, db: AsyncSession = Depends(get_db)):
+    """Serve the satellite image for a scan."""
+    scan = await db.get(Scan, scan_id)
+    if not scan:
+        raise HTTPException(404, "Scan not found")
+
+    if not scan.imagery_path or not Path(scan.imagery_path).exists():
+        raise HTTPException(404, "No imagery available for this scan")
+
+    return FileResponse(
+        scan.imagery_path,
+        media_type="image/jpeg",
+        headers={"Cache-Control": "public, max-age=86400"},
+    )
 
 
 # ── POST /api/upload ─────────────────────────────────────────
@@ -259,6 +298,9 @@ async def get_pending_reviews(limit: int = 20, db: AsyncSession = Depends(get_db
                 "status": scan.status,
                 "scanned_at": scan.scanned_at.isoformat() if scan.scanned_at else "",
                 "imagery_note": scan.imagery_note,
+                "has_imagery": bool(scan.imagery_path),
+                "detection_backend": scan.detection_backend,
+                "detection_details": json.loads(scan.detection_details) if scan.detection_details else [],
             }
         )
 
@@ -395,7 +437,15 @@ async def _geocode_one(
 # ── Background: Scanning ──────────────────────────────────────
 
 async def _run_scan_batch(business_ids: list[int]):
-    """Simulate container detection for a batch of businesses."""
+    """
+    Run container detection for a batch of businesses.
+
+    Pipeline per business:
+      1. Fetch satellite imagery from Mapbox (if coords + token available)
+      2. Run ML detection (YOLO / ONNX / simulation fallback)
+      3. Filter + classify detections
+      4. Store results
+    """
     from database import SessionLocal
 
     async with SessionLocal() as db:
@@ -406,68 +456,72 @@ async def _run_scan_batch(business_ids: list[int]):
         state.last_error = None
         await db.commit()
 
-        for i, biz_id in enumerate(business_ids):
-            biz = await db.get(Business, biz_id)
-            if not biz:
-                continue
+        backend = get_backend()
 
-            # Simulate detection (deterministic from business data)
-            detections = _simulate_detection(biz)
-            valid = [d for d in detections if not d.get("excluded") and d["confidence"] >= CONFIDENCE_THRESHOLD]
+        async with httpx.AsyncClient(timeout=30) as client:
+            for i, biz_id in enumerate(business_ids):
+                biz = await db.get(Business, biz_id)
+                if not biz:
+                    continue
 
-            containers = len(valid)
-            max_conf = max((d["confidence"] for d in valid), default=0.0)
+                imagery_path = None
+                imagery_note = "No coordinates"
 
-            # Determine status
-            if containers == 0:
-                status = "clear"
-            elif max_conf >= AUTO_APPROVE_THRESHOLD:
-                status = "confirmed"
-            else:
-                status = "review"
+                # Step 1: Fetch satellite imagery
+                if biz.lat and biz.lng:
+                    imagery_note = f"Satellite scan at ({biz.lat:.4f}, {biz.lng:.4f})"
+                    try:
+                        path = await fetch_satellite_image(
+                            biz.lat, biz.lng, client=client
+                        )
+                        if path:
+                            imagery_path = str(path)
+                            imagery_note += f" | {IMAGE_WIDTH}x{IMAGE_HEIGHT}@2x"
+                    except Exception as e:
+                        logger.warning(f"Imagery fetch failed for {biz.name}: {e}")
+                        imagery_note += " | imagery fetch failed"
 
-            scan = Scan(
-                business_id=biz_id,
-                containers_detected=containers,
-                max_confidence=round(max_conf, 2),
-                status=status,
-                imagery_note=f"Satellite scan at ({biz.lat:.4f}, {biz.lng:.4f})" if biz.lat else "No coordinates",
-                detection_details=json.dumps(detections),
-            )
-            db.add(scan)
+                # Step 2: Run ML detection
+                detections = detect_containers(
+                    imagery_path,
+                    business_name=biz.name,
+                    business_address=biz.address,
+                )
 
-            biz.status = status
-            state.scan_progress = i + 1
-            await db.commit()
+                # Step 3: Filter + classify
+                valid = [
+                    d for d in detections
+                    if not d.get("excluded") and d["confidence"] >= CONFIDENCE_THRESHOLD
+                ]
+                containers = len(valid)
+                max_conf = max((d["confidence"] for d in valid), default=0.0)
 
-            # Simulate processing time
-            await asyncio.sleep(0.5)
+                if containers == 0:
+                    status = "clear"
+                elif max_conf >= AUTO_APPROVE_THRESHOLD:
+                    status = "confirmed"
+                else:
+                    status = "review"
+
+                # Step 4: Store scan
+                scan = Scan(
+                    business_id=biz_id,
+                    containers_detected=containers,
+                    max_confidence=round(max_conf, 2),
+                    status=status,
+                    imagery_note=imagery_note,
+                    imagery_path=imagery_path,
+                    detection_backend=backend,
+                    detection_details=json.dumps(detections),
+                )
+                db.add(scan)
+
+                biz.status = status
+                state.scan_progress = i + 1
+                await db.commit()
+
+                # Small delay between scans to avoid rate limiting
+                await asyncio.sleep(0.3)
 
         state.scanning = False
         await db.commit()
-
-
-def _simulate_detection(biz: Business) -> list[dict]:
-    """Deterministic mock container detection based on business data."""
-    seed = hash(f"{biz.name}{biz.address}")
-    rng = random.Random(seed)
-
-    count = rng.randint(0, 4)
-    detections = []
-
-    for i in range(count):
-        is_trailer = rng.random() > 0.75
-        container_type = "trailer" if is_trailer else ("40ft" if rng.random() > 0.5 else "other")
-        confidence = round(0.35 + rng.random() * 0.6, 2)
-
-        detections.append({
-            "type": container_type,
-            "confidence": confidence,
-            "x": 50 + rng.randint(0, 300),
-            "y": 50 + rng.randint(0, 200),
-            "width": 120 if container_type == "40ft" else (100 if container_type == "trailer" else 80),
-            "height": 35 if container_type == "40ft" else (28 if container_type == "trailer" else 30),
-            "excluded": is_trailer,
-        })
-
-    return detections

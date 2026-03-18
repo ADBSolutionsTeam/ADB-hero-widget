@@ -16,6 +16,9 @@ export interface Business {
   opportunityScore?: number;
   estimatedDemand?: string;
   constructionPhase?: string;
+  scanId?: number;
+  hasImagery?: boolean;
+  detectionBackend?: string;
 }
 
 export interface ContainerDetection {

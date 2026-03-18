@@ -81,10 +81,22 @@ export default function BusinessScanner({
           lng: loc.lng,
           containersDetected: loc.containers_detected,
           confidence: loc.max_confidence,
+          containerDetails: loc.detection_details?.map((d) => ({
+            type: d.type as "40ft" | "other" | "trailer",
+            confidence: d.confidence,
+            x: d.x,
+            y: d.y,
+            width: d.width,
+            height: d.height,
+            excluded: d.excluded,
+          })),
           status: loc.status === "needs_review" ? "review"
                 : loc.status === "confirmed"    ? "confirmed"
                 : loc.status === "rejected"     ? "clear"
                 : "pending",
+          scanId: loc.scan_id ?? undefined,
+          hasImagery: loc.has_imagery,
+          detectionBackend: loc.detection_backend ?? undefined,
         }));
 
         setBusinesses(mapped);

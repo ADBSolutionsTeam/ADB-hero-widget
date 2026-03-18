@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Business } from "@/lib/types";
+import { imageryUrl, fetchModelStatus, ModelStatus } from "@/lib/api";
 import Map, { Marker, NavigationControl } from "react-map-gl/mapbox";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
@@ -16,6 +17,12 @@ export default function DetectionViewer({
   onBack,
 }: DetectionViewerProps) {
   const [hoveredDetection, setHoveredDetection] = useState<number | null>(null);
+  const [modelStatus, setModelStatus] = useState<ModelStatus | null>(null);
+  const [imageryError, setImageryError] = useState(false);
+
+  useEffect(() => {
+    fetchModelStatus().then(setModelStatus).catch(() => {});
+  }, []);
 
   const validDetections = (business.containerDetails ?? []).filter(
     (d) => !d.excluded && d.confidence >= 0.45
@@ -86,9 +93,16 @@ export default function DetectionViewer({
             </div>
           </div>
 
-          {/* Satellite view — Mapbox or simulated */}
+          {/* Satellite view — backend imagery, Mapbox, or simulated */}
           <div className="relative bg-slate-800 w-full overflow-hidden" style={{ height: 440 }}>
-            {MAPBOX_TOKEN && business.lat && business.lng ? (
+            {business.hasImagery && business.scanId && !imageryError ? (
+              <img
+                src={imageryUrl(business.scanId)}
+                alt={`Satellite view of ${business.name}`}
+                className="w-full h-full object-cover"
+                onError={() => setImageryError(true)}
+              />
+            ) : MAPBOX_TOKEN && business.lat && business.lng ? (
               <SatelliteMap lat={business.lat} lng={business.lng} />
             ) : (
               <SatelliteBackground seed={business.name} />
@@ -180,8 +194,19 @@ export default function DetectionViewer({
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="text-[10px] text-white/50">
-                  {MAPBOX_TOKEN && business.lat ? "Imagery: Mapbox Satellite" : "Imagery: Simulated"}
+                  {business.hasImagery && business.scanId ? "Imagery: Mapbox Static API" : MAPBOX_TOKEN && business.lat ? "Imagery: Mapbox Satellite" : "Imagery: Simulated"}
                 </span>
+                {business.detectionBackend && (
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                    business.detectionBackend === "yolo" ? "bg-emerald-500/80 text-white" :
+                    business.detectionBackend === "onnx" ? "bg-blue-500/80 text-white" :
+                    "bg-slate-500/60 text-white"
+                  }`}>
+                    {business.detectionBackend === "yolo" ? "YOLOv8" :
+                     business.detectionBackend === "onnx" ? "ONNX" :
+                     "Simulated"}
+                  </span>
+                )}
               </div>
             </div>
           </div>
@@ -318,6 +343,38 @@ export default function DetectionViewer({
                   value={business.estimatedDemand ?? "N/A"}
                   highlight
                 />
+              </div>
+            </div>
+          )}
+
+          {/* Model Status */}
+          {modelStatus && (
+            <div className="bg-white rounded-xl border border-ice-200 p-4 shadow-sm">
+              <h3 className="text-sm font-semibold text-navy-950 mb-3 flex items-center gap-2">
+                ML Model
+                <span className={`text-[10px] px-2 py-0.5 rounded font-medium ${
+                  modelStatus.backend === "yolo" ? "bg-emerald-100 text-emerald-700" :
+                  modelStatus.backend === "onnx" ? "bg-blue-100 text-blue-700" :
+                  "bg-slate-100 text-slate-500"
+                }`}>
+                  {modelStatus.backend === "yolo" ? "YOLOv8 Active" :
+                   modelStatus.backend === "onnx" ? "ONNX Active" :
+                   "Simulation"}
+                </span>
+              </h3>
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-steel-500">Model</span>
+                  <span className="text-navy-950 font-mono">{modelStatus.model_name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-steel-500">Min Confidence</span>
+                  <span className="text-navy-950">{Math.round(modelStatus.confidence_floor * 100)}%</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-steel-500">Input Size</span>
+                  <span className="text-navy-950 font-mono">{modelStatus.img_size[0]}x{modelStatus.img_size[1]}</span>
+                </div>
               </div>
             </div>
           )}

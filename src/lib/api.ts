@@ -29,6 +29,18 @@ export interface ApiLocation {
   status: string;
   containers_detected: number;
   max_confidence: number;
+  scan_id: number | null;
+  has_imagery: boolean;
+  detection_backend: string | null;
+  detection_details: Array<{
+    type: string;
+    confidence: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    excluded?: boolean;
+  }>;
 }
 
 export interface ApiReview {
@@ -43,6 +55,25 @@ export interface ApiReview {
   status: string;
   scanned_at: string;
   imagery_note: string;
+  has_imagery: boolean;
+  detection_backend: string;
+  detection_details: Array<{
+    type: string;
+    confidence: number;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    excluded?: boolean;
+  }>;
+}
+
+export interface ModelStatus {
+  backend: string;
+  model_name: string;
+  confidence_floor: number;
+  img_size: [number, number];
+  container_classes: string[];
 }
 
 export interface PipelineStatus {
@@ -99,6 +130,16 @@ export async function fetchPipelineStatus(): Promise<PipelineStatus> {
 /** GET /api/config — public settings (Maps API key, thresholds) */
 export async function fetchConfig(): Promise<ApiConfig> {
   return apiFetch<ApiConfig>("/api/config");
+}
+
+/** GET /api/model/status — ML detection backend info */
+export async function fetchModelStatus(): Promise<ModelStatus> {
+  return apiFetch<ModelStatus>("/api/model/status");
+}
+
+/** Build URL for satellite imagery endpoint */
+export function imageryUrl(scanId: number): string {
+  return `${API_BASE}/api/imagery/${scanId}`;
 }
 
 /**

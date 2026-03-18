@@ -32,6 +32,8 @@ class Scan(Base):
     max_confidence: Mapped[float] = mapped_column(Float, default=0.0)
     status: Mapped[str] = mapped_column(String(20), default="pending")
     imagery_note: Mapped[str] = mapped_column(String(255), default="")
+    imagery_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    detection_backend: Mapped[str] = mapped_column(String(20), default="simulation")
     detection_details: Mapped[str | None] = mapped_column(Text, nullable=True)
     scanned_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
