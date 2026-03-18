@@ -6,11 +6,17 @@ import { processBusinesses, SAMPLE_BUSINESSES } from "@/lib/mock-data";
 import { uploadCSV, startScan, pollUntilDone, fetchLocations, batchReview, PipelineStatus } from "@/lib/api";
 import DetectionViewer from "./DetectionViewer";
 import ExportMenu from "./ExportMenu";
-import FilterBar, { useBusinessFilters } from "./FilterBar";
+import FilterBar, { FilterState } from "./FilterBar";
 
 interface BusinessScannerProps {
   businesses: Business[];
   setBusinesses: (businesses: Business[]) => void;
+  filters: FilterState;
+  updateFilter: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void;
+  resetFilters: () => void;
+  isFiltered: boolean;
+  counts: Record<string, number>;
+  filteredBusinesses: Business[];
 }
 
 const STAGE_LABELS: Record<ProcessingStage, string> = {
@@ -33,6 +39,12 @@ const STAGE_ORDER: ProcessingStage[] = [
 export default function BusinessScanner({
   businesses,
   setBusinesses,
+  filters,
+  updateFilter,
+  resetFilters,
+  isFiltered,
+  counts,
+  filteredBusinesses,
 }: BusinessScannerProps) {
   const [stage, setStage] = useState<ProcessingStage>("idle");
   const [selectedBusiness, setSelectedBusiness] = useState<Business | null>(null);
@@ -45,9 +57,6 @@ export default function BusinessScanner({
   // Multi-select state
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [batchLoading, setBatchLoading] = useState(false);
-
-  const { filters, updateFilter, resetFilters, filtered: filteredBusinesses, isFiltered, counts } =
-    useBusinessFilters(businesses);
 
   // Selection helpers
   const filteredIds = useMemo(() => new Set(filteredBusinesses.map((b) => b.id)), [filteredBusinesses]);

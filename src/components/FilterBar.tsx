@@ -11,6 +11,8 @@ export interface FilterState {
   confidenceMax: number;
   opportunityMin: number;
   opportunityMax: number;
+  containersMin: number;
+  containersMax: number;
   search: string;
 }
 
@@ -20,10 +22,64 @@ export const DEFAULT_FILTERS: FilterState = {
   confidenceMax: 100,
   opportunityMin: 0,
   opportunityMax: 100,
+  containersMin: 0,
+  containersMax: 50,
   search: "",
 };
 
-// ── Hook for filter logic ────────────────────────────────────
+// ── Pure filter function (usable without hook) ───────────────
+
+export function applyFilters(businesses: Business[], filters: FilterState): Business[] {
+  return businesses.filter((b) => {
+    // Status
+    if (filters.status !== "all" && b.status !== filters.status) return false;
+
+    // Confidence range
+    const conf = Math.round((b.confidence ?? 0) * 100);
+    if (conf < filters.confidenceMin || conf > filters.confidenceMax) return false;
+
+    // Opportunity range
+    const opp = b.opportunityScore ?? 0;
+    if (opp < filters.opportunityMin || opp > filters.opportunityMax) return false;
+
+    // Containers range
+    const cnt = b.containersDetected ?? 0;
+    if (cnt < filters.containersMin || cnt > filters.containersMax) return false;
+
+    // Text search
+    if (filters.search) {
+      const q = filters.search.toLowerCase();
+      const haystack = `${b.name} ${b.address} ${b.city} ${b.state} ${b.zip}`.toLowerCase();
+      if (!haystack.includes(q)) return false;
+    }
+
+    return true;
+  });
+}
+
+export function isFilterActive(filters: FilterState): boolean {
+  return (
+    filters.status !== "all" ||
+    filters.confidenceMin > 0 ||
+    filters.confidenceMax < 100 ||
+    filters.opportunityMin > 0 ||
+    filters.opportunityMax < 100 ||
+    filters.containersMin > 0 ||
+    filters.containersMax < 50 ||
+    filters.search !== ""
+  );
+}
+
+export function getFilterCounts(businesses: Business[]) {
+  return {
+    all: businesses.length,
+    confirmed: businesses.filter((b) => b.status === "confirmed").length,
+    review: businesses.filter((b) => b.status === "review").length,
+    clear: businesses.filter((b) => b.status === "clear").length,
+  };
+}
+
+// ── Hook for local filter state (standalone use) ─────────────
 
 export function useBusinessFilters(businesses: Business[]) {
   const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
@@ -37,47 +93,9 @@ export function useBusinessFilters(businesses: Business[]) {
 
   const resetFilters = useCallback(() => setFilters(DEFAULT_FILTERS), []);
 
-  const filtered = useMemo(() => {
-    return businesses.filter((b) => {
-      // Status
-      if (filters.status !== "all" && b.status !== filters.status) return false;
-
-      // Confidence range
-      const conf = Math.round((b.confidence ?? 0) * 100);
-      if (conf < filters.confidenceMin || conf > filters.confidenceMax) return false;
-
-      // Opportunity range
-      const opp = b.opportunityScore ?? 0;
-      if (opp < filters.opportunityMin || opp > filters.opportunityMax) return false;
-
-      // Text search
-      if (filters.search) {
-        const q = filters.search.toLowerCase();
-        const haystack = `${b.name} ${b.address} ${b.city} ${b.state} ${b.zip}`.toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-
-      return true;
-    });
-  }, [businesses, filters]);
-
-  const isFiltered =
-    filters.status !== "all" ||
-    filters.confidenceMin > 0 ||
-    filters.confidenceMax < 100 ||
-    filters.opportunityMin > 0 ||
-    filters.opportunityMax < 100 ||
-    filters.search !== "";
-
-  const counts = useMemo(
-    () => ({
-      all: businesses.length,
-      confirmed: businesses.filter((b) => b.status === "confirmed").length,
-      review: businesses.filter((b) => b.status === "review").length,
-      clear: businesses.filter((b) => b.status === "clear").length,
-    }),
-    [businesses]
-  );
+  const filtered = useMemo(() => applyFilters(businesses, filters), [businesses, filters]);
+  const isFiltered = isFilterActive(filters);
+  const counts = useMemo(() => getFilterCounts(businesses), [businesses]);
 
   return { filters, updateFilter, resetFilters, filtered, isFiltered, counts };
 }
@@ -111,6 +129,13 @@ export default function FilterBar({
   compact = false,
 }: FilterBarProps) {
   const [expanded, setExpanded] = useState(false);
+
+  // Count active advanced filters for badge
+  const advancedCount = [
+    filters.confidenceMin > 0 || filters.confidenceMax < 100,
+    filters.opportunityMin > 0 || filters.opportunityMax < 100,
+    filters.containersMin > 0 || filters.containersMax < 50,
+  ].filter(Boolean).length;
 
   return (
     <div className="space-y-2">
@@ -168,7 +193,7 @@ export default function FilterBar({
         <button
           onClick={() => setExpanded(!expanded)}
           className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors flex items-center gap-1.5 ${
-            expanded || isFiltered
+            expanded || advancedCount > 0
               ? "bg-blush-100 text-blush-700 border border-blush-200"
               : "bg-white text-steel-600 border border-ice-200 hover:border-navy-800"
           }`}
@@ -186,8 +211,10 @@ export default function FilterBar({
             <line x1="10" y1="18" x2="14" y2="18" />
           </svg>
           Filters
-          {isFiltered && !expanded && (
-            <span className="w-1.5 h-1.5 rounded-full bg-blush-500" />
+          {advancedCount > 0 && !expanded && (
+            <span className="bg-blush-400 text-white text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">
+              {advancedCount}
+            </span>
           )}
         </button>
 
@@ -205,7 +232,7 @@ export default function FilterBar({
       {/* Row 2: Advanced filters (expandable) */}
       {expanded && (
         <div
-          className={`flex items-center gap-6 bg-white border border-ice-200 rounded-xl ${
+          className={`flex items-center gap-6 bg-white border border-ice-200 rounded-xl flex-wrap ${
             compact ? "px-4 py-3" : "px-5 py-4"
           }`}
         >
@@ -233,6 +260,20 @@ export default function FilterBar({
             valueMax={filters.opportunityMax}
             onChangeMin={(v) => updateFilter("opportunityMin", v)}
             onChangeMax={(v) => updateFilter("opportunityMax", v)}
+          />
+
+          <div className="w-px h-8 bg-ice-200" />
+
+          {/* Containers Detected Range */}
+          <RangeFilter
+            label="Containers"
+            suffix=""
+            min={0}
+            max={50}
+            valueMin={filters.containersMin}
+            valueMax={filters.containersMax}
+            onChangeMin={(v) => updateFilter("containersMin", v)}
+            onChangeMax={(v) => updateFilter("containersMax", v)}
           />
 
           <div className="flex-1" />

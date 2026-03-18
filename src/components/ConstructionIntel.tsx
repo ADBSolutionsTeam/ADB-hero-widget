@@ -3,21 +3,34 @@
 import { useState, useMemo } from "react";
 import { Business } from "@/lib/types";
 import ExportMenu from "./ExportMenu";
+import FilterBar, { FilterState } from "./FilterBar";
 
 interface ConstructionIntelProps {
   businesses: Business[];
+  filters: FilterState;
+  updateFilter: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void;
+  resetFilters: () => void;
+  isFiltered: boolean;
+  counts: Record<string, number>;
+  filteredBusinesses: Business[];
 }
 
 type SortField = "opportunity" | "construction" | "name";
 
 export default function ConstructionIntel({
   businesses,
+  filters,
+  updateFilter,
+  resetFilters,
+  isFiltered,
+  counts,
+  filteredBusinesses,
 }: ConstructionIntelProps) {
   const [sortBy, setSortBy] = useState<SortField>("opportunity");
   const hasData = businesses.length > 0 && businesses[0].status !== "pending";
 
   const withConstruction = useMemo(() => {
-    const filtered = businesses.filter((b) => (b.constructionScore ?? 0) > 30);
+    const filtered = filteredBusinesses.filter((b) => (b.constructionScore ?? 0) > 30);
     return filtered.sort((a, b) => {
       if (sortBy === "opportunity") return (b.opportunityScore ?? 0) - (a.opportunityScore ?? 0);
       if (sortBy === "construction") return (b.constructionScore ?? 0) - (a.constructionScore ?? 0);
@@ -151,6 +164,17 @@ export default function ConstructionIntel({
           </div>
         </div>
       )}
+
+      {/* Filters */}
+      <FilterBar
+        filters={filters}
+        updateFilter={updateFilter}
+        resetFilters={resetFilters}
+        isFiltered={isFiltered}
+        counts={counts}
+        totalFiltered={withConstruction.length}
+        compact
+      />
 
       {/* Sort Controls */}
       <div className="flex items-center gap-2">

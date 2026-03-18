@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Business } from "@/lib/types";
 import Sidebar from "@/components/Sidebar";
 import Dashboard from "@/components/Dashboard";
@@ -8,10 +8,36 @@ import BusinessScanner from "@/components/BusinessScanner";
 import ConstructionIntel from "@/components/ConstructionIntel";
 import MapView from "@/components/MapView";
 import { geocodeBusinesses } from "@/lib/geocode";
+import {
+  FilterState,
+  DEFAULT_FILTERS,
+  applyFilters,
+  isFilterActive,
+  getFilterCounts,
+} from "@/components/FilterBar";
 
 export default function Home() {
   const [activeTab, setActiveTab] = useState("dashboard");
   const [businesses, setBusinesses] = useState<Business[]>([]);
+
+  // Shared filter state — persists across tab switches
+  const [filters, setFilters] = useState<FilterState>(DEFAULT_FILTERS);
+
+  const updateFilter = useCallback(
+    <K extends keyof FilterState>(key: K, value: FilterState[K]) => {
+      setFilters((prev) => ({ ...prev, [key]: value }));
+    },
+    []
+  );
+
+  const resetFilters = useCallback(() => setFilters(DEFAULT_FILTERS), []);
+
+  const filteredBusinesses = useMemo(
+    () => applyFilters(businesses, filters),
+    [businesses, filters]
+  );
+  const isFiltered = isFilterActive(filters);
+  const filterCounts = useMemo(() => getFilterCounts(businesses), [businesses]);
 
   const handleSetBusinesses = useCallback(
     (update: Business[] | ((prev: Business[]) => Business[])) => {
@@ -29,6 +55,15 @@ export default function Home() {
     []
   );
 
+  const sharedFilterProps = {
+    filters,
+    updateFilter,
+    resetFilters,
+    isFiltered,
+    counts: filterCounts,
+    filteredBusinesses,
+  };
+
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar activeTab={activeTab} onTabChange={setActiveTab} businesses={businesses} />
@@ -42,13 +77,20 @@ export default function Home() {
             <BusinessScanner
               businesses={businesses}
               setBusinesses={handleSetBusinesses}
+              {...sharedFilterProps}
             />
           )}
           {activeTab === "map" && (
-            <MapView businesses={businesses} />
+            <MapView
+              businesses={businesses}
+              {...sharedFilterProps}
+            />
           )}
           {activeTab === "construction" && (
-            <ConstructionIntel businesses={businesses} />
+            <ConstructionIntel
+              businesses={businesses}
+              {...sharedFilterProps}
+            />
           )}
         </div>
       </main>

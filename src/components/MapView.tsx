@@ -3,13 +3,19 @@
 import { useState, useMemo, useCallback } from "react";
 import MapGL, { Marker, Popup, NavigationControl } from "react-map-gl/mapbox";
 import { Business } from "@/lib/types";
-import FilterBar, { useBusinessFilters } from "./FilterBar";
+import FilterBar, { FilterState } from "./FilterBar";
 
 const MAPBOX_TOKEN = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || "";
 
 interface MapViewProps {
   businesses: Business[];
   onSelectBusiness?: (business: Business) => void;
+  filters: FilterState;
+  updateFilter: <K extends keyof FilterState>(key: K, value: FilterState[K]) => void;
+  resetFilters: () => void;
+  isFiltered: boolean;
+  counts: Record<string, number>;
+  filteredBusinesses: Business[];
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -20,15 +26,21 @@ const STATUS_COLORS: Record<string, string> = {
   processing: "#60a5fa",
 };
 
-export default function MapView({ businesses, onSelectBusiness }: MapViewProps) {
+export default function MapView({
+  businesses,
+  onSelectBusiness,
+  filters,
+  updateFilter,
+  resetFilters,
+  isFiltered,
+  counts,
+  filteredBusinesses,
+}: MapViewProps) {
   const [popupBusiness, setPopupBusiness] = useState<Business | null>(null);
 
-  const { filters, updateFilter, resetFilters, filtered, isFiltered, counts } =
-    useBusinessFilters(businesses);
-
   const geoBusinesses = useMemo(
-    () => filtered.filter((b) => b.lat && b.lng),
-    [filtered]
+    () => filteredBusinesses.filter((b) => b.lat && b.lng),
+    [filteredBusinesses]
   );
 
   // Use all geo businesses for initial bounds (not just filtered)
