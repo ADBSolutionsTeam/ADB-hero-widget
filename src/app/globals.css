@@ -64,3 +64,26 @@ button:focus-visible {
   outline: 2px solid #C7A39B;
   outline-offset: 2px;
 }
+
+/* Area Scanner popup — clean styling */
+.area-scan-popup .mapboxgl-popup-content {
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 30px rgba(8, 17, 31, 0.25);
+  border: 1px solid #d8e2f0;
+}
+
+.area-scan-popup .mapboxgl-popup-tip {
+  border-top-color: white;
+}
+
+.area-scan-popup .mapboxgl-popup-close-button {
+  font-size: 16px;
+  color: #8FA3BD;
+  padding: 2px 6px;
+}
+
+.area-scan-popup .mapboxgl-popup-close-button:hover {
+  color: #08111F;
+  background: transparent;
+}

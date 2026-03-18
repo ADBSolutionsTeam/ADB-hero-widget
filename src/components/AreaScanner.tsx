@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo, useRef, useEffect } from "react";
 import MapGL, {
   NavigationControl,
   Marker,
+  Popup,
   Source,
   Layer,
   MapRef,
@@ -351,6 +352,25 @@ export default function AreaScanner() {
             </Source>
           )}
 
+          {/* Corner markers for scan zone */}
+          {scanArea && (stage === "selected" || stage === "scanning" || stage === "complete") && (
+            <>
+              {[
+                { lat: scanArea.bounds.north, lng: scanArea.bounds.west, corner: "tl" },
+                { lat: scanArea.bounds.north, lng: scanArea.bounds.east, corner: "tr" },
+                { lat: scanArea.bounds.south, lng: scanArea.bounds.west, corner: "bl" },
+                { lat: scanArea.bounds.south, lng: scanArea.bounds.east, corner: "br" },
+              ].map((c) => (
+                <Marker key={c.corner} latitude={c.lat} longitude={c.lng} anchor="center">
+                  <CornerBracket
+                    corner={c.corner as "tl" | "tr" | "bl" | "br"}
+                    scanning={stage === "scanning"}
+                  />
+                </Marker>
+              ))}
+            </>
+          )}
+
           {/* Tile grid — show during scanning and complete */}
           {tilesGeoJSON && (stage === "scanning" || stage === "complete") && (
             <Source
@@ -381,6 +401,7 @@ export default function AreaScanner() {
                 onClick={(e) => {
                   e.originalEvent.stopPropagation();
                   setSelectedResult(r);
+                  mapRef.current?.flyTo({ center: [r.lng, r.lat], zoom: 16, duration: 800 });
                 }}
               >
                 <ResultPin
@@ -389,6 +410,21 @@ export default function AreaScanner() {
                 />
               </Marker>
             ))}
+
+          {/* Map popup for selected result */}
+          {stage === "complete" && selectedResult && (
+            <Popup
+              latitude={selectedResult.lat}
+              longitude={selectedResult.lng}
+              anchor="bottom"
+              offset={12}
+              closeOnClick={false}
+              onClose={() => setSelectedResult(null)}
+              className="area-scan-popup"
+            >
+              <MapResultPopup result={selectedResult} />
+            </Popup>
+          )}
         </MapGL>
       </div>
 
@@ -852,6 +888,87 @@ function ResultPin({
         className="w-3 h-3 rounded-full border-2 border-white shadow-lg"
         style={{ backgroundColor: color }}
       />
+    </div>
+  );
+}
+
+function CornerBracket({ corner, scanning }: { corner: "tl" | "tr" | "bl" | "br"; scanning: boolean }) {
+  const color = scanning ? C.cyan : C.blush;
+  const size = 16;
+  const stroke = 2.5;
+
+  // Determine which edges to draw based on corner position
+  const paths: Record<string, string> = {
+    tl: `M${stroke} ${size} L${stroke} ${stroke} L${size} ${stroke}`,
+    tr: `M${size - stroke} ${size} L${size - stroke} ${stroke} L0 ${stroke}`,
+    bl: `M${stroke} 0 L${stroke} ${size - stroke} L${size} ${size - stroke}`,
+    br: `M${size - stroke} 0 L${size - stroke} ${size - stroke} L0 ${size - stroke}`,
+  };
+
+  return (
+    <div className={scanning ? "animate-pulse-slow" : ""}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <path
+          d={paths[corner]}
+          fill="none"
+          stroke={color}
+          strokeWidth={stroke}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      </svg>
+    </div>
+  );
+}
+
+function MapResultPopup({ result }: { result: AreaScanResult }) {
+  const detail = useMemo(() => getResultDetail(result), [result]);
+  const color = GROUP_COLORS[result.group] ?? C.steel400;
+  const confidencePct = Math.round(result.confidence * 100);
+
+  return (
+    <div className="min-w-[200px] p-0.5">
+      <div className="flex items-center gap-2 mb-1.5">
+        <div
+          className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+          style={{ backgroundColor: color }}
+        />
+        <h4 className="font-bold text-sm text-navy-950 leading-tight">{result.label}</h4>
+      </div>
+      <p className="text-[11px] text-steel-500 mb-2">
+        {result.address}
+      </p>
+
+      {/* Confidence bar */}
+      <div className="flex items-center gap-2 mb-2">
+        <div className="flex-1 h-1.5 bg-ice-200 rounded-full overflow-hidden">
+          <div
+            className="h-full rounded-full"
+            style={{
+              width: `${confidencePct}%`,
+              backgroundColor: confidencePct > 85 ? "#10b981" : confidencePct > 70 ? "#f59e0b" : "#8FA3BD",
+            }}
+          />
+        </div>
+        <span className="text-[10px] font-bold text-navy-950">{confidencePct}%</span>
+      </div>
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <span
+          className="text-[9px] px-1.5 py-0.5 rounded font-semibold"
+          style={{ backgroundColor: color + "20", color }}
+        >
+          {GROUP_LABELS[result.group]}
+        </span>
+        <span className="text-[9px] px-1.5 py-0.5 rounded font-medium bg-ice-100 text-steel-600">
+          {detail.condition}
+        </span>
+        {result.opportunityScore != null && (
+          <span className="text-[9px] text-steel-500 font-medium">
+            Opp: {result.opportunityScore}/100
+          </span>
+        )}
+      </div>
     </div>
   );
 }
