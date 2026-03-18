@@ -31,7 +31,7 @@ export default function Home() {
 
   return (
     <div className="flex h-screen overflow-hidden">
-      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} />
+      <Sidebar activeTab={activeTab} onTabChange={setActiveTab} businesses={businesses} />
 
       <main className="flex-1 overflow-y-auto">
         <div className="max-w-6xl mx-auto p-6">
