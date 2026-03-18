@@ -258,3 +258,139 @@ export function formatCoord(value: number, type: "lat" | "lng"): string {
   const dir = type === "lat" ? (value >= 0 ? "N" : "S") : (value >= 0 ? "E" : "W");
   return `${Math.abs(value).toFixed(4)}° ${dir}`;
 }
+
+// ── Result detail enrichment ────────────────────────────────────────
+
+export interface ResultDetail {
+  condition: string;
+  conditionColor: string;
+  estimatedSize: string;
+  actionLabel: string;
+  actionDescription: string;
+  priority: "high" | "medium" | "low";
+  tags: string[];
+  notes: string;
+}
+
+const CONDITION_LABELS: Record<string, { label: string; color: string }[]> = {
+  containers: [
+    { label: "In Use — Occupied", color: "#f59e0b" },
+    { label: "Stationary — Available", color: "#10b981" },
+    { label: "Stacked — Storage Yard", color: "#8FA3BD" },
+    { label: "Recently Placed", color: "#22d3ee" },
+  ],
+  equipment: [
+    { label: "Active — Operating", color: "#f59e0b" },
+    { label: "Idle — Parked On-Site", color: "#10b981" },
+    { label: "In Transit", color: "#22d3ee" },
+    { label: "Staged — Ready to Deploy", color: "#8FA3BD" },
+  ],
+  construction: [
+    { label: "Active Development", color: "#f59e0b" },
+    { label: "Early Stage — Prep Work", color: "#22d3ee" },
+    { label: "Mid Build — Structural Phase", color: "#10b981" },
+    { label: "Site Cleared — Pre-Construction", color: "#8FA3BD" },
+  ],
+};
+
+const ACTION_MAP: Record<DetectionCategory, { label: string; description: string }> = {
+  "container-40ft": { label: "Verify & Contact Owner", description: "High-value 40' container detected. Verify placement status and contact property owner for rental opportunity." },
+  "container-other": { label: "Classify & Assess", description: "Non-standard container detected. Recommend field classification to determine size and rental potential." },
+  "excavator": { label: "Monitor Site Activity", description: "Heavy excavation equipment indicates active groundwork. Monitor for container demand as project progresses." },
+  "bulldozer": { label: "Track Site Phase", description: "Grading equipment detected. Site likely in early development — flag for future container needs." },
+  "crane": { label: "High-Priority Lead", description: "Crane presence indicates major vertical construction. High probability of container demand for materials staging." },
+  "dump-truck": { label: "Assess Material Flow", description: "Active material transport detected. Site may need additional storage containers for staging." },
+  "cleared-land": { label: "Watch & Alert", description: "Cleared parcel detected — likely pre-construction. Add to watch list for upcoming container demand." },
+  "active-site": { label: "Immediate Outreach", description: "Active construction confirmed. High confidence of current or near-term container rental demand." },
+  "foundation-work": { label: "Schedule Follow-Up", description: "Foundation stage detected. Container demand typically peaks in 2-4 weeks during framing phase." },
+  "material-staging": { label: "Direct Sales Opportunity", description: "Material staging area without adequate container coverage. Direct outreach recommended." },
+};
+
+const SIZE_MAP: Record<DetectionCategory, string> = {
+  "container-40ft": "40' × 8' × 8.5' (standard)",
+  "container-other": "20' × 8' × 8.5' (estimated)",
+  excavator: "~35 ton class",
+  bulldozer: "~D6 class (medium)",
+  crane: "Mobile crane (~50 ton)",
+  "dump-truck": "Articulated hauler",
+  "cleared-land": "~0.5–2 acres (estimated)",
+  "active-site": "~1–5 acres (estimated)",
+  "foundation-work": "~0.25–1 acre footprint",
+  "material-staging": "~0.1–0.5 acre area",
+};
+
+const TAG_MAP: Record<string, string[]> = {
+  containers: ["Storage", "Rental Opportunity", "Field Verify"],
+  equipment: ["Heavy Equipment", "Active Project", "Construction Phase"],
+  construction: ["Development", "Site Activity", "Market Signal"],
+};
+
+const NOTES_MAP: Record<DetectionCategory, string[]> = {
+  "container-40ft": [
+    "Standard 40' ISO container. Appears to be ground-level placement on gravel pad.",
+    "40' container detected near loading dock. May be in active use for site storage.",
+    "Single 40' unit visible. Condition appears good — no visible rust or damage.",
+  ],
+  "container-other": [
+    "Smaller container detected — possibly 20' unit or custom size. Verify in field.",
+    "Non-standard container near building entrance. Could be office conversion.",
+  ],
+  excavator: [
+    "Track-mounted excavator visible near active trench line. Site appears mid-dig.",
+    "Excavator parked near material pile. Possible shift break or staging.",
+  ],
+  bulldozer: [
+    "Dozer tracks visible across cleared area. Active grading operation.",
+    "Bulldozer staged near site entrance. Grading likely in progress.",
+  ],
+  crane: [
+    "Mobile crane erected on-site. Indicates structural phase of construction.",
+    "Crane boom visible — significant vertical construction underway.",
+  ],
+  "dump-truck": [
+    "Dump truck near excavation area. Active earthmoving operation.",
+    "Multiple dump truck tracks visible. High material movement volume.",
+  ],
+  "cleared-land": [
+    "Recently cleared parcel — vegetation removed, bare soil visible. No structures yet.",
+    "Large cleared area with perimeter fencing. Pre-construction staging likely.",
+  ],
+  "active-site": [
+    "Multiple vehicles and equipment visible. Active construction with daily operations.",
+    "Construction activity confirmed — temporary structures and equipment staging visible.",
+  ],
+  "foundation-work": [
+    "Concrete foundation forms visible. Structural phase beginning.",
+    "Foundation poured — rebar and form work visible from satellite imagery.",
+  ],
+  "material-staging": [
+    "Palletized materials and lumber stacks detected near site perimeter.",
+    "Open-air material storage area. Containers could protect high-value materials.",
+  ],
+};
+
+/** Generate enriched detail data for a scan result */
+export function getResultDetail(result: AreaScanResult): ResultDetail {
+  const seed = result.id.charCodeAt(result.id.length - 1) + Math.round(result.lat * 1000);
+  const rand = seededRand(seed);
+
+  const conditions = CONDITION_LABELS[result.group] ?? CONDITION_LABELS.construction;
+  const condition = conditions[Math.floor(rand() * conditions.length)];
+  const action = ACTION_MAP[result.category];
+  const notes = NOTES_MAP[result.category] ?? ["Detection confirmed via satellite imagery analysis."];
+
+  const priority: "high" | "medium" | "low" =
+    result.confidence > 0.88 ? "high" :
+    result.confidence > 0.75 ? "medium" : "low";
+
+  return {
+    condition: condition.label,
+    conditionColor: condition.color,
+    estimatedSize: SIZE_MAP[result.category] ?? "Unknown",
+    actionLabel: action.label,
+    actionDescription: action.description,
+    priority,
+    tags: TAG_MAP[result.group] ?? [],
+    notes: notes[Math.floor(rand() * notes.length)],
+  };
+}

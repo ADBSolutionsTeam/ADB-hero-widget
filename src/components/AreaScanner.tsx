@@ -23,6 +23,7 @@ import {
   generateScanResults,
   estimateLocation,
   formatCoord,
+  getResultDetail,
   SCAN_STEPS,
   LocationInfo,
 } from "@/lib/area-scanner-data";
@@ -572,30 +573,30 @@ export default function AreaScanner() {
 
           {/* ── COMPLETE STATE ── */}
           {stage === "complete" && (
-            <div className="space-y-0">
+            <div className="space-y-0 flex flex-col h-full">
               {/* Result summary cards */}
-              <div className="px-5 py-4 border-b border-navy-700">
+              <div className="px-5 py-4 border-b border-navy-700 flex-shrink-0">
                 <div className="grid grid-cols-3 gap-2">
                   <SummaryCard
                     label="Containers"
                     value={resultSummary.containers}
                     color={C.blush}
                     active={resultFilter === "containers"}
-                    onClick={() => setResultFilter(resultFilter === "containers" ? "all" : "containers")}
+                    onClick={() => { setResultFilter(resultFilter === "containers" ? "all" : "containers"); setSelectedResult(null); }}
                   />
                   <SummaryCard
                     label="Equipment"
                     value={resultSummary.equipment}
                     color="#f59e0b"
                     active={resultFilter === "equipment"}
-                    onClick={() => setResultFilter(resultFilter === "equipment" ? "all" : "equipment")}
+                    onClick={() => { setResultFilter(resultFilter === "equipment" ? "all" : "equipment"); setSelectedResult(null); }}
                   />
                   <SummaryCard
                     label="Construction"
                     value={resultSummary.construction}
                     color="#10b981"
                     active={resultFilter === "construction"}
-                    onClick={() => setResultFilter(resultFilter === "construction" ? "all" : "construction")}
+                    onClick={() => { setResultFilter(resultFilter === "construction" ? "all" : "construction"); setSelectedResult(null); }}
                   />
                 </div>
                 <div className="flex items-center justify-between mt-3 text-xs">
@@ -608,88 +609,99 @@ export default function AreaScanner() {
                 </div>
               </div>
 
-              {/* Results list */}
-              <div className="overflow-y-auto max-h-[calc(100vh-340px)]">
-                {filteredResults.map((r) => (
-                  <button
-                    key={r.id}
-                    onClick={() => {
-                      setSelectedResult(r);
-                      mapRef.current?.flyTo({
-                        center: [r.lng, r.lat],
-                        zoom: 16,
-                        duration: 800,
-                      });
-                    }}
-                    className={`w-full text-left px-5 py-3 border-b border-navy-700/50 hover:bg-navy-800/50 transition-colors ${
-                      selectedResult?.id === r.id ? "bg-navy-800/80" : ""
-                    }`}
-                  >
-                    <div className="flex items-start gap-3">
-                      <div
-                        className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0"
-                        style={{ backgroundColor: GROUP_COLORS[r.group] }}
-                      />
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-semibold text-ice-100 truncate">
-                            {r.label}
-                          </span>
-                          <span className="text-[10px] text-steel-500 ml-2 flex-shrink-0">
-                            {Math.round(r.confidence * 100)}%
-                          </span>
-                        </div>
-                        <p className="text-[10px] text-steel-500 mt-0.5 truncate">
-                          {r.address ?? `${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}`}
-                        </p>
-                        <div className="flex items-center gap-2 mt-1">
-                          <span
-                            className="text-[9px] px-1.5 py-0.5 rounded font-medium"
-                            style={{
-                              backgroundColor: GROUP_COLORS[r.group] + "18",
-                              color: GROUP_COLORS[r.group],
-                            }}
-                          >
-                            {GROUP_LABELS[r.group]}
-                          </span>
-                          {r.opportunityScore != null && (
-                            <span className="text-[9px] text-steel-500">
-                              Opp: {r.opportunityScore}/100
+              {/* Results list OR detail panel */}
+              {selectedResult ? (
+                <ResultDetailPanel
+                  result={selectedResult}
+                  allResults={results}
+                  onBack={() => setSelectedResult(null)}
+                  onSelectResult={(r) => {
+                    setSelectedResult(r);
+                    mapRef.current?.flyTo({ center: [r.lng, r.lat], zoom: 16, duration: 800 });
+                  }}
+                />
+              ) : (
+                <div className="overflow-y-auto flex-1">
+                  {filteredResults.map((r) => (
+                    <button
+                      key={r.id}
+                      onClick={() => {
+                        setSelectedResult(r);
+                        mapRef.current?.flyTo({
+                          center: [r.lng, r.lat],
+                          zoom: 16,
+                          duration: 800,
+                        });
+                      }}
+                      className="w-full text-left px-5 py-3 border-b border-navy-700/50 hover:bg-navy-800/50 transition-colors"
+                    >
+                      <div className="flex items-start gap-3">
+                        <div
+                          className="w-2 h-2 rounded-full mt-1.5 flex-shrink-0"
+                          style={{ backgroundColor: GROUP_COLORS[r.group] }}
+                        />
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-semibold text-ice-100 truncate">
+                              {r.label}
                             </span>
-                          )}
+                            <span className="text-[10px] text-steel-500 ml-2 flex-shrink-0">
+                              {Math.round(r.confidence * 100)}%
+                            </span>
+                          </div>
+                          <p className="text-[10px] text-steel-500 mt-0.5 truncate">
+                            {r.address ?? `${r.lat.toFixed(4)}, ${r.lng.toFixed(4)}`}
+                          </p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <span
+                              className="text-[9px] px-1.5 py-0.5 rounded font-medium"
+                              style={{
+                                backgroundColor: GROUP_COLORS[r.group] + "18",
+                                color: GROUP_COLORS[r.group],
+                              }}
+                            >
+                              {GROUP_LABELS[r.group]}
+                            </span>
+                            {r.opportunityScore != null && (
+                              <span className="text-[9px] text-steel-500">
+                                Opp: {r.opportunityScore}/100
+                              </span>
+                            )}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </button>
-                ))}
-              </div>
+                    </button>
+                  ))}
+                </div>
+              )}
 
-              {/* Actions footer */}
-              <div className="px-5 py-3 border-t border-navy-700 space-y-2">
-                <button
-                  onClick={() => {
-                    // Re-fit to scan area
-                    if (scanArea) {
-                      mapRef.current?.fitBounds(
-                        [
-                          [scanArea.bounds.west, scanArea.bounds.south],
-                          [scanArea.bounds.east, scanArea.bounds.north],
-                        ],
-                        { padding: 80, duration: 800 }
-                      );
-                    }
-                  }}
-                  className="w-full py-2 rounded-lg bg-navy-800 text-steel-400 text-xs font-medium hover:text-ice-100 hover:bg-navy-700 transition-all border border-navy-600/50"
-                >
-                  Fit to Scan Area
-                </button>
-                <button
-                  onClick={resetScan}
-                  className="w-full py-2 rounded-lg bg-blush-400/10 text-blush-400 text-xs font-medium hover:bg-blush-400/20 transition-all"
-                >
-                  New Scan
-                </button>
-              </div>
+              {/* Actions footer — only show when NOT in detail view */}
+              {!selectedResult && (
+                <div className="px-5 py-3 border-t border-navy-700 space-y-2 flex-shrink-0">
+                  <button
+                    onClick={() => {
+                      if (scanArea) {
+                        mapRef.current?.fitBounds(
+                          [
+                            [scanArea.bounds.west, scanArea.bounds.south],
+                            [scanArea.bounds.east, scanArea.bounds.north],
+                          ],
+                          { padding: 80, duration: 800 }
+                        );
+                      }
+                    }}
+                    className="w-full py-2 rounded-lg bg-navy-800 text-steel-400 text-xs font-medium hover:text-ice-100 hover:bg-navy-700 transition-all border border-navy-600/50"
+                  >
+                    Fit to Scan Area
+                  </button>
+                  <button
+                    onClick={resetScan}
+                    className="w-full py-2 rounded-lg bg-blush-400/10 text-blush-400 text-xs font-medium hover:bg-blush-400/20 transition-all"
+                  >
+                    New Scan
+                  </button>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -796,6 +808,294 @@ function ResultPin({
         style={{ backgroundColor: color }}
       />
     </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Result Detail Panel
+// ════════════════════════════════════════════════════════════════════
+
+function ResultDetailPanel({
+  result,
+  allResults,
+  onBack,
+  onSelectResult,
+}: {
+  result: AreaScanResult;
+  allResults: AreaScanResult[];
+  onBack: () => void;
+  onSelectResult: (r: AreaScanResult) => void;
+}) {
+  const detail = useMemo(() => getResultDetail(result), [result]);
+  const groupColor = GROUP_COLORS[result.group] ?? C.steel400;
+
+  // Find nearby results (same cluster / within ~0.003 degrees)
+  const nearby = useMemo(() => {
+    return allResults.filter(
+      (r) =>
+        r.id !== result.id &&
+        Math.abs(r.lat - result.lat) < 0.003 &&
+        Math.abs(r.lng - result.lng) < 0.004
+    ).slice(0, 4);
+  }, [result, allResults]);
+
+  const confidencePct = Math.round(result.confidence * 100);
+
+  const PRIORITY_STYLES = {
+    high: { bg: "bg-red-500/15", text: "text-red-400", label: "High Priority" },
+    medium: { bg: "bg-amber-500/15", text: "text-amber-400", label: "Medium Priority" },
+    low: { bg: "bg-steel-400/15", text: "text-steel-400", label: "Low Priority" },
+  };
+  const prio = PRIORITY_STYLES[detail.priority];
+
+  return (
+    <div className="flex flex-col flex-1 overflow-hidden animate-slide-in">
+      {/* Back button */}
+      <div className="px-4 py-2.5 border-b border-navy-700/50 flex-shrink-0">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-2 text-xs text-steel-400 hover:text-ice-100 transition-colors"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          Back to results
+        </button>
+      </div>
+
+      {/* Scrollable detail content */}
+      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
+        {/* Header with category icon placeholder */}
+        <div className="flex items-start gap-3">
+          <div
+            className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
+            style={{ backgroundColor: groupColor + "20" }}
+          >
+            <CategoryIcon category={result.category} color={groupColor} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <h3 className="text-sm font-bold text-ice-100">{result.label}</h3>
+            <p className="text-[10px] text-steel-500 mt-0.5">{result.address}</p>
+            <div className="flex items-center gap-2 mt-1.5">
+              <span
+                className="text-[9px] px-1.5 py-0.5 rounded font-medium"
+                style={{ backgroundColor: groupColor + "18", color: groupColor }}
+              >
+                {GROUP_LABELS[result.group]}
+              </span>
+              <span className={`text-[9px] px-1.5 py-0.5 rounded font-medium ${prio.bg} ${prio.text}`}>
+                {prio.label}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* Mock satellite crop */}
+        <div className="rounded-lg overflow-hidden border border-navy-700/50">
+          <div
+            className="h-32 relative flex items-center justify-center"
+            style={{
+              background: `linear-gradient(135deg, #1a2a1a 0%, #2a3a2a 30%, #1d2d1d 60%, #253525 100%)`,
+            }}
+          >
+            {/* Simulated satellite texture */}
+            <div className="absolute inset-0 opacity-30" style={{
+              backgroundImage: `url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23556655' fill-opacity='0.3'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")`,
+            }} />
+            {/* Detection highlight box */}
+            <div
+              className="relative w-16 h-10 border-2 rounded-sm"
+              style={{ borderColor: groupColor, boxShadow: `0 0 12px ${groupColor}40` }}
+            >
+              <div className="absolute -top-5 left-1/2 -translate-x-1/2 text-[9px] font-bold whitespace-nowrap px-1.5 py-0.5 rounded"
+                style={{ backgroundColor: groupColor, color: C.navy950 }}>
+                DETECTION
+              </div>
+            </div>
+            {/* Tile / coords overlay */}
+            <div className="absolute bottom-1.5 left-2 text-[9px] text-white/50 font-mono">
+              {result.tileId} · {result.lat.toFixed(5)}, {result.lng.toFixed(5)}
+            </div>
+            <div className="absolute top-1.5 right-2 text-[9px] font-medium px-1.5 py-0.5 rounded"
+              style={{ backgroundColor: groupColor + "30", color: groupColor }}>
+              Satellite View
+            </div>
+          </div>
+        </div>
+
+        {/* Confidence bar */}
+        <div>
+          <div className="flex items-center justify-between mb-1.5">
+            <span className="text-[10px] text-steel-500 uppercase tracking-wider font-semibold">Confidence</span>
+            <span className="text-xs font-bold" style={{ color: confidencePct > 85 ? "#10b981" : confidencePct > 70 ? "#f59e0b" : C.steel400 }}>
+              {confidencePct}%
+            </span>
+          </div>
+          <div className="h-2 bg-navy-700 rounded-full overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-500"
+              style={{
+                width: `${confidencePct}%`,
+                backgroundColor: confidencePct > 85 ? "#10b981" : confidencePct > 70 ? "#f59e0b" : C.steel400,
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Details grid */}
+        <Section title="Detection Details">
+          <div className="space-y-2.5 text-xs">
+            <div className="flex items-center justify-between">
+              <span className="text-steel-500">Condition</span>
+              <span className="font-medium" style={{ color: detail.conditionColor }}>{detail.condition}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-steel-500">Estimated Size</span>
+              <span className="text-ice-100 font-medium">{detail.estimatedSize}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-steel-500">Category</span>
+              <span className="text-ice-100 font-medium capitalize">{result.category.replace(/-/g, " ")}</span>
+            </div>
+            {result.opportunityScore != null && (
+              <div className="flex items-center justify-between">
+                <span className="text-steel-500">Opportunity Score</span>
+                <span className="font-bold" style={{ color: C.blush }}>{result.opportunityScore}/100</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between">
+              <span className="text-steel-500">Source Tile</span>
+              <span className="text-ice-100 font-mono text-[10px]">{result.tileId}</span>
+            </div>
+          </div>
+        </Section>
+
+        {/* AI Notes */}
+        <Section title="Analysis Notes">
+          <p className="text-xs text-steel-400 leading-relaxed">{detail.notes}</p>
+        </Section>
+
+        {/* Recommended action */}
+        <div>
+          <h4 className="text-[10px] text-steel-500 uppercase tracking-wider font-semibold mb-2">
+            Recommended Action
+          </h4>
+          <div className="bg-blush-400/8 border border-blush-400/20 rounded-lg px-3 py-3">
+            <div className="flex items-center gap-2 mb-1.5">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={C.blush} strokeWidth="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
+                <path d="M22 4L12 14.01l-3-3" />
+              </svg>
+              <span className="text-xs font-bold text-blush-400">{detail.actionLabel}</span>
+            </div>
+            <p className="text-[11px] text-steel-400 leading-relaxed">{detail.actionDescription}</p>
+          </div>
+        </div>
+
+        {/* Tags */}
+        <div className="flex flex-wrap gap-1.5">
+          {detail.tags.map((tag) => (
+            <span
+              key={tag}
+              className="text-[9px] px-2 py-1 rounded-full bg-navy-800 text-steel-400 border border-navy-700/50 font-medium"
+            >
+              {tag}
+            </span>
+          ))}
+        </div>
+
+        {/* Nearby detections */}
+        {nearby.length > 0 && (
+          <div>
+            <h4 className="text-[10px] text-steel-500 uppercase tracking-wider font-semibold mb-2">
+              Nearby Detections ({nearby.length})
+            </h4>
+            <div className="space-y-1">
+              {nearby.map((r) => (
+                <button
+                  key={r.id}
+                  onClick={() => onSelectResult(r)}
+                  className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg bg-navy-800/50 hover:bg-navy-800 border border-navy-700/30 transition-colors text-left"
+                >
+                  <div
+                    className="w-2 h-2 rounded-full flex-shrink-0"
+                    style={{ backgroundColor: GROUP_COLORS[r.group] }}
+                  />
+                  <span className="text-[11px] text-ice-100 font-medium truncate flex-1">{r.label}</span>
+                  <span className="text-[10px] text-steel-500">{Math.round(r.confidence * 100)}%</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Detail footer */}
+      <div className="px-5 py-3 border-t border-navy-700 flex-shrink-0 space-y-2">
+        <button
+          onClick={onBack}
+          className="w-full py-2 rounded-lg bg-navy-800 text-steel-400 text-xs font-medium hover:text-ice-100 hover:bg-navy-700 transition-all border border-navy-600/50"
+        >
+          Back to All Results
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Category Icons ──────────────────────────────────────────────────
+
+function CategoryIcon({ category, color }: { category: string; color: string }) {
+  // Container icon
+  if (category.startsWith("container")) {
+    return (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5">
+        <rect x="2" y="6" width="20" height="12" rx="1" />
+        <line x1="7" y1="6" x2="7" y2="18" />
+        <line x1="12" y1="6" x2="12" y2="18" />
+        <line x1="17" y1="6" x2="17" y2="18" />
+      </svg>
+    );
+  }
+  // Equipment icons
+  if (category === "excavator" || category === "bulldozer") {
+    return (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5">
+        <path d="M3 18h2l3-8h4l2 4h7" />
+        <circle cx="6" cy="18" r="2" />
+        <circle cx="18" cy="18" r="2" />
+        <path d="M12 6l-3 8" />
+      </svg>
+    );
+  }
+  if (category === "crane") {
+    return (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5">
+        <path d="M6 21V3l12 4v2" />
+        <path d="M6 7h12" />
+        <path d="M18 7v6" />
+        <path d="M16 13h4" />
+        <circle cx="6" cy="21" r="1" />
+      </svg>
+    );
+  }
+  if (category === "dump-truck") {
+    return (
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5">
+        <path d="M3 17V7h10v10H3z" />
+        <path d="M13 13h5l3 4v0H13V13z" />
+        <circle cx="7" cy="17" r="2" />
+        <circle cx="17" cy="17" r="2" />
+      </svg>
+    );
+  }
+  // Construction signals
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth="1.5">
+      <path d="M2 20h20" />
+      <path d="M5 20V8l7-5 7 5v12" />
+      <rect x="9" y="12" width="6" height="8" />
+    </svg>
   );
 }
 
