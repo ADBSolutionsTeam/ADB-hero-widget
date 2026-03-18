@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useMemo } from "react";
 import { Business, ProcessingStage } from "@/lib/types";
 import { processBusinesses, SAMPLE_BUSINESSES } from "@/lib/mock-data";
-import { uploadCSV, startScan, pollUntilDone, fetchLocations, PipelineStatus } from "@/lib/api";
+import { uploadCSV, startScan, pollUntilDone, fetchLocations, batchReview, PipelineStatus } from "@/lib/api";
 import DetectionViewer from "./DetectionViewer";
 import ExportMenu from "./ExportMenu";
 import FilterBar, { useBusinessFilters } from "./FilterBar";
@@ -42,8 +42,79 @@ export default function BusinessScanner({
   const [pipelineStatus, setPipelineStatus] = useState<PipelineStatus | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Multi-select state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchLoading, setBatchLoading] = useState(false);
+
   const { filters, updateFilter, resetFilters, filtered: filteredBusinesses, isFiltered, counts } =
     useBusinessFilters(businesses);
+
+  // Selection helpers
+  const filteredIds = useMemo(() => new Set(filteredBusinesses.map((b) => b.id)), [filteredBusinesses]);
+  const selectedInView = useMemo(() => {
+    const s = new Set<string>();
+    selectedIds.forEach((id) => { if (filteredIds.has(id)) s.add(id); });
+    return s;
+  }, [selectedIds, filteredIds]);
+
+  const allFilteredSelected = filteredBusinesses.length > 0 && selectedInView.size === filteredBusinesses.length;
+  const someFilteredSelected = selectedInView.size > 0 && !allFilteredSelected;
+
+  const toggleOne = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleAll = useCallback(() => {
+    if (allFilteredSelected) {
+      // Deselect all filtered
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredIds.forEach((id) => next.delete(id));
+        return next;
+      });
+    } else {
+      // Select all filtered
+      setSelectedIds((prev) => {
+        const next = new Set(prev);
+        filteredIds.forEach((id) => next.add(id));
+        return next;
+      });
+    }
+  }, [allFilteredSelected, filteredIds]);
+
+  const clearSelection = useCallback(() => setSelectedIds(new Set()), []);
+
+  /** Batch status update — works for both demo and API modes */
+  const handleBatchUpdate = useCallback(
+    async (status: "confirmed" | "review" | "clear") => {
+      if (selectedInView.size === 0) return;
+      setBatchLoading(true);
+
+      try {
+        // Try API batch update
+        const numericIds = [...selectedInView].map(Number).filter((n) => !isNaN(n));
+        if (numericIds.length > 0) {
+          const apiStatus = status === "clear" ? "rejected" as const : status === "review" ? "review" as const : "confirmed" as const;
+          await batchReview(numericIds, apiStatus).catch(() => {});
+        }
+
+        // Update local state
+        setBusinesses(
+          businesses.map((b) =>
+            selectedInView.has(b.id) ? { ...b, status } : b
+          )
+        );
+        clearSelection();
+      } finally {
+        setBatchLoading(false);
+      }
+    },
+    [selectedInView, businesses, setBusinesses, clearSelection]
+  );
 
   /** Real pipeline: upload CSV → geocode → scan → load results */
   const processFileReal = useCallback(
@@ -374,6 +445,7 @@ export default function BusinessScanner({
             onClick={() => {
               setStage("idle");
               setBusinesses([]);
+              clearSelection();
             }}
             className="border border-ice-200 text-steel-600 px-4 py-2 rounded-lg text-sm hover:border-navy-800 hover:text-navy-950 transition-colors"
           >
@@ -393,11 +465,68 @@ export default function BusinessScanner({
         totalFiltered={filteredBusinesses.length}
       />
 
+      {/* Batch Action Bar */}
+      {selectedInView.size > 0 && (
+        <div className="bg-navy-950 rounded-xl px-4 py-3 flex items-center justify-between shadow-lg animate-in">
+          <div className="flex items-center gap-3">
+            <span className="bg-blush-400 text-navy-950 text-xs font-bold w-6 h-6 rounded-full flex items-center justify-center">
+              {selectedInView.size}
+            </span>
+            <span className="text-sm text-white">
+              {selectedInView.size === 1 ? "business" : "businesses"} selected
+              {isFiltered && selectedInView.size < selectedIds.size && (
+                <span className="text-steel-400 ml-1">
+                  ({selectedIds.size} total)
+                </span>
+              )}
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <BatchButton
+              label="Confirm"
+              color="bg-emerald-500 hover:bg-emerald-600 text-white"
+              icon={<CheckIcon />}
+              onClick={() => handleBatchUpdate("confirmed")}
+              loading={batchLoading}
+            />
+            <BatchButton
+              label="Review"
+              color="bg-amber-500 hover:bg-amber-600 text-white"
+              icon={<EyeIcon />}
+              onClick={() => handleBatchUpdate("review")}
+              loading={batchLoading}
+            />
+            <BatchButton
+              label="Clear"
+              color="bg-slate-500 hover:bg-slate-600 text-white"
+              icon={<XIcon />}
+              onClick={() => handleBatchUpdate("clear")}
+              loading={batchLoading}
+            />
+            <div className="w-px h-5 bg-navy-700 mx-1" />
+            <button
+              onClick={clearSelection}
+              className="text-xs text-steel-400 hover:text-white transition-colors px-2 py-1"
+            >
+              Deselect all
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Results Table */}
       <div className="bg-white rounded-xl border border-ice-200 overflow-hidden shadow-sm">
         <table className="w-full">
           <thead>
             <tr className="border-b border-ice-200 bg-ice-100/80">
+              <th className="text-center px-3 py-3 w-10">
+                <Checkbox
+                  checked={allFilteredSelected}
+                  indeterminate={someFilteredSelected}
+                  onChange={toggleAll}
+                  aria-label="Select all"
+                />
+              </th>
               <th className="text-left text-xs font-semibold text-steel-600 px-4 py-3">
                 Business Name
               </th>
@@ -419,51 +548,65 @@ export default function BusinessScanner({
             </tr>
           </thead>
           <tbody className="divide-y divide-ice-200">
-            {filteredBusinesses.map((biz) => (
-              <tr
-                key={biz.id}
-                className="hover:bg-blush-400/5 transition-colors cursor-pointer"
-                onClick={() => setSelectedBusiness(biz)}
-              >
-                <td className="px-4 py-3.5">
-                  <p className="text-sm font-medium text-navy-950">
-                    {biz.name}
-                  </p>
-                </td>
-                <td className="px-4 py-3.5">
-                  <p className="text-sm text-steel-600">
-                    {biz.address}, {biz.city}
-                  </p>
-                </td>
-                <td className="px-4 py-3.5 text-center">
-                  <span className={`text-sm font-bold ${
-                    (biz.containersDetected ?? 0) > 0 ? "text-navy-950" : "text-steel-400"
-                  }`}>
-                    {biz.containersDetected}
-                  </span>
-                </td>
-                <td className="px-4 py-3.5 text-center">
-                  <ConfidenceBar value={biz.confidence ?? 0} />
-                </td>
-                <td className="px-4 py-3.5 text-center">
-                  <StatusBadge status={biz.status ?? "pending"} />
-                </td>
-                <td className="px-4 py-3.5 text-center">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedBusiness(biz);
-                    }}
-                    className="text-xs text-blush-400 hover:text-navy-950 font-medium transition-colors inline-flex items-center gap-1"
-                  >
-                    View
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M9 18l6-6-6-6" />
-                    </svg>
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {filteredBusinesses.map((biz) => {
+              const isSelected = selectedIds.has(biz.id);
+              return (
+                <tr
+                  key={biz.id}
+                  className={`transition-colors cursor-pointer ${
+                    isSelected
+                      ? "bg-blush-400/10 hover:bg-blush-400/15"
+                      : "hover:bg-blush-400/5"
+                  }`}
+                  onClick={() => setSelectedBusiness(biz)}
+                >
+                  <td className="text-center px-3 py-3.5" onClick={(e) => e.stopPropagation()}>
+                    <Checkbox
+                      checked={isSelected}
+                      onChange={() => toggleOne(biz.id)}
+                      aria-label={`Select ${biz.name}`}
+                    />
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <p className="text-sm font-medium text-navy-950">
+                      {biz.name}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3.5">
+                    <p className="text-sm text-steel-600">
+                      {biz.address}, {biz.city}
+                    </p>
+                  </td>
+                  <td className="px-4 py-3.5 text-center">
+                    <span className={`text-sm font-bold ${
+                      (biz.containersDetected ?? 0) > 0 ? "text-navy-950" : "text-steel-400"
+                    }`}>
+                      {biz.containersDetected}
+                    </span>
+                  </td>
+                  <td className="px-4 py-3.5 text-center">
+                    <ConfidenceBar value={biz.confidence ?? 0} />
+                  </td>
+                  <td className="px-4 py-3.5 text-center">
+                    <StatusBadge status={biz.status ?? "pending"} />
+                  </td>
+                  <td className="px-4 py-3.5 text-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedBusiness(biz);
+                      }}
+                      className="text-xs text-blush-400 hover:text-navy-950 font-medium transition-colors inline-flex items-center gap-1"
+                    >
+                      View
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M9 18l6-6-6-6" />
+                      </svg>
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
@@ -508,6 +651,94 @@ function StatusBadge({ status }: { status: string }) {
     >
       {status}
     </span>
+  );
+}
+
+function Checkbox({
+  checked,
+  indeterminate,
+  onChange,
+  "aria-label": ariaLabel,
+}: {
+  checked: boolean;
+  indeterminate?: boolean;
+  onChange: () => void;
+  "aria-label"?: string;
+}) {
+  return (
+    <button
+      role="checkbox"
+      aria-checked={indeterminate ? "mixed" : checked}
+      aria-label={ariaLabel}
+      onClick={onChange}
+      className={`w-4 h-4 rounded border-2 flex items-center justify-center transition-all ${
+        checked || indeterminate
+          ? "bg-blush-400 border-blush-400"
+          : "border-steel-400 hover:border-navy-800"
+      }`}
+    >
+      {checked && (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5">
+          <polyline points="20 6 9 17 4 12" />
+        </svg>
+      )}
+      {indeterminate && !checked && (
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="white" strokeWidth="3.5">
+          <line x1="5" y1="12" x2="19" y2="12" />
+        </svg>
+      )}
+    </button>
+  );
+}
+
+function BatchButton({
+  label,
+  color,
+  icon,
+  onClick,
+  loading,
+}: {
+  label: string;
+  color: string;
+  icon: React.ReactNode;
+  onClick: () => void;
+  loading: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={loading}
+      className={`${color} text-xs font-semibold px-3 py-1.5 rounded-lg transition-all inline-flex items-center gap-1.5 disabled:opacity-50`}
+    >
+      {icon}
+      {label}
+    </button>
+  );
+}
+
+function CheckIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+function XIcon() {
+  return (
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
   );
 }
 

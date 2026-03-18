@@ -191,6 +191,18 @@ export async function submitReview(
   });
 }
 
+/** POST /api/reviews/batch — bulk status update for multiple businesses */
+export async function batchReview(
+  businessIds: number[],
+  status: "confirmed" | "rejected" | "review" | "clear",
+  notes?: string
+): Promise<{ ok: boolean; updated: number; status: string }> {
+  return apiFetch("/api/reviews/batch", {
+    method: "POST",
+    body: JSON.stringify({ business_ids: businessIds, status, notes }),
+  });
+}
+
 /** GET /api/export — download confirmed detections as CSV blob */
 export async function downloadExport(): Promise<Blob> {
   const res = await fetch(`${API_BASE}/api/export`);

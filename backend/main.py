@@ -77,6 +77,12 @@ class ReviewRequest(BaseModel):
     notes: str | None = None
 
 
+class BatchReviewRequest(BaseModel):
+    business_ids: list[int]
+    status: str  # "confirmed" | "rejected" | "review" | "clear"
+    notes: str | None = None
+
+
 # ── GET /api/stats ────────────────────────────────────────────
 
 @app.get("/api/stats")
@@ -330,6 +336,45 @@ async def submit_review(scan_id: int, req: ReviewRequest, db: AsyncSession = Dep
     await db.commit()
 
     return {"ok": True, "scan_id": scan.id, "status": scan.status}
+
+
+# ── POST /api/reviews/batch ──────────────────────────────────
+
+@app.post("/api/reviews/batch")
+async def batch_review(req: BatchReviewRequest, db: AsyncSession = Depends(get_db)):
+    """Bulk status update for multiple businesses."""
+    if req.status not in ("confirmed", "rejected", "review", "clear"):
+        raise HTTPException(400, "Status must be 'confirmed', 'rejected', 'review', or 'clear'")
+
+    updated = 0
+    now = datetime.now(timezone.utc)
+
+    for biz_id in req.business_ids:
+        # Find latest scan for this business
+        latest_scan = (
+            await db.execute(
+                select(Scan)
+                .where(Scan.business_id == biz_id)
+                .order_by(Scan.scanned_at.desc())
+                .limit(1)
+            )
+        ).scalar()
+
+        if latest_scan:
+            latest_scan.status = req.status
+            latest_scan.reviewed_at = now
+            if req.notes:
+                latest_scan.review_notes = req.notes
+
+        # Update business status
+        biz = await db.get(Business, biz_id)
+        if biz:
+            biz.status = req.status
+            updated += 1
+
+    await db.commit()
+
+    return {"ok": True, "updated": updated, "status": req.status}
 
 
 # ── GET /api/export ───────────────────────────────────────────
