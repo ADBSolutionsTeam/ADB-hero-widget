@@ -71,34 +71,12 @@ export default function AreaScanner() {
   const [scanArea, setScanArea] = useState<ScanArea | null>(null);
   const [locationInfo, setLocationInfo] = useState<LocationInfo | null>(null);
   const [progressSteps, setProgressSteps] = useState<ScanProgressStep[]>([]);
-  const [currentStepIdx, setCurrentStepIdx] = useState(-1);
   const [results, setResults] = useState<AreaScanResult[]>([]);
   const [selectedResult, setSelectedResult] = useState<AreaScanResult | null>(null);
   const [resultFilter, setResultFilter] = useState<string>("all");
   const [scanToolActive, setScanToolActive] = useState(false);
   const [tilesScanned, setTilesScanned] = useState(0);
   const scanAbortRef = useRef(false);
-
-  // No mapbox token guard
-  if (!MAPBOX_TOKEN) {
-    return (
-      <div className="flex items-center justify-center h-[calc(100vh-48px)]">
-        <div className="text-center max-w-md">
-          <div className="w-16 h-16 rounded-2xl bg-navy-950 flex items-center justify-center mx-auto mb-4">
-            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#C7A39B" strokeWidth="2">
-              <circle cx="12" cy="12" r="10" />
-              <path d="M12 8v4M12 16h.01" />
-            </svg>
-          </div>
-          <h3 className="text-lg font-bold text-navy-950 mb-2">Mapbox Token Required</h3>
-          <p className="text-sm text-steel-500">
-            Add <code className="bg-ice-100 px-1.5 py-0.5 rounded text-xs font-mono">NEXT_PUBLIC_MAPBOX_TOKEN</code> to
-            your <code className="bg-ice-100 px-1.5 py-0.5 rounded text-xs font-mono">.env.local</code> file.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   // ── Map click handler ───────────────────────────────────────────
   const handleMapClick = useCallback(
@@ -138,14 +116,14 @@ export default function AreaScanner() {
     setStage("scanning");
     const steps = buildProgressSteps();
     setProgressSteps(steps);
-    setCurrentStepIdx(0);
+
     setTilesScanned(0);
 
     // Simulate progress through each step
     for (let i = 0; i < SCAN_STEPS.length; i++) {
       if (scanAbortRef.current) return;
 
-      setCurrentStepIdx(i);
+
       setProgressSteps((prev) =>
         prev.map((s, idx) => ({
           ...s,
@@ -186,12 +164,19 @@ export default function AreaScanner() {
     setScanArea(null);
     setLocationInfo(null);
     setProgressSteps([]);
-    setCurrentStepIdx(-1);
+
     setResults([]);
     setSelectedResult(null);
     setTilesScanned(0);
     setScanToolActive(false);
     setResultFilter("all");
+  }, []);
+
+  // ── Abort scan on unmount ─────────────────────────────────────
+  useEffect(() => {
+    return () => {
+      scanAbortRef.current = true;
+    };
   }, []);
 
   // ── Map data sources ──────────────────────────────────────────
@@ -229,6 +214,27 @@ export default function AreaScanner() {
     if (!scanArea) return 0;
     return Math.round((tilesScanned / scanArea.tileCount) * 100);
   }, [stage, tilesScanned, scanArea]);
+
+  // ── No mapbox token guard (after all hooks) ───────────────────
+  if (!MAPBOX_TOKEN) {
+    return (
+      <div className="flex items-center justify-center h-[calc(100vh-48px)]">
+        <div className="text-center max-w-md">
+          <div className="w-16 h-16 rounded-2xl bg-navy-950 flex items-center justify-center mx-auto mb-4">
+            <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="#C7A39B" strokeWidth="2">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 8v4M12 16h.01" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-bold text-navy-950 mb-2">Mapbox Token Required</h3>
+          <p className="text-sm text-steel-500">
+            Add <code className="bg-ice-100 px-1.5 py-0.5 rounded text-xs font-mono">NEXT_PUBLIC_MAPBOX_TOKEN</code> to
+            your <code className="bg-ice-100 px-1.5 py-0.5 rounded text-xs font-mono">.env.local</code> file.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-[calc(100vh-0px)] overflow-hidden bg-navy-950">
@@ -443,7 +449,6 @@ export default function AreaScanner() {
               <h2 className="text-sm font-bold text-ice-100">Area Scanner</h2>
               <p className="text-[10px] text-steel-500 uppercase tracking-wider">
                 {stage === "idle" && "Select scan zone"}
-                {stage === "selecting" && "Place scan area"}
                 {stage === "selected" && "Ready to scan"}
                 {stage === "scanning" && "Scan in progress"}
                 {stage === "complete" && "Scan complete"}
@@ -894,25 +899,26 @@ function ResultPin({
 
 function CornerBracket({ corner, scanning }: { corner: "tl" | "tr" | "bl" | "br"; scanning: boolean }) {
   const color = scanning ? C.cyan : C.blush;
-  const size = 16;
-  const stroke = 2.5;
+  const s = 16; // SVG size
+  const w = 2.5; // stroke width
+  const leg = 10; // length of each bracket leg
 
-  // Determine which edges to draw based on corner position
+  // Each corner is an L-shape: one vertical leg and one horizontal leg
   const paths: Record<string, string> = {
-    tl: `M${stroke} ${size} L${stroke} ${stroke} L${size} ${stroke}`,
-    tr: `M${size - stroke} ${size} L${size - stroke} ${stroke} L0 ${stroke}`,
-    bl: `M${stroke} 0 L${stroke} ${size - stroke} L${size} ${size - stroke}`,
-    br: `M${size - stroke} 0 L${size - stroke} ${size - stroke} L0 ${size - stroke}`,
+    tl: `M${w} ${w + leg} L${w} ${w} L${w + leg} ${w}`,
+    tr: `M${s - w - leg} ${w} L${s - w} ${w} L${s - w} ${w + leg}`,
+    bl: `M${w} ${s - w - leg} L${w} ${s - w} L${w + leg} ${s - w}`,
+    br: `M${s - w - leg} ${s - w} L${s - w} ${s - w} L${s - w} ${s - w - leg}`,
   };
 
   return (
     <div className={scanning ? "animate-pulse-slow" : ""}>
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+      <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`}>
         <path
           d={paths[corner]}
           fill="none"
           stroke={color}
-          strokeWidth={stroke}
+          strokeWidth={w}
           strokeLinecap="round"
           strokeLinejoin="round"
         />
@@ -936,7 +942,7 @@ function MapResultPopup({ result }: { result: AreaScanResult }) {
         <h4 className="font-bold text-sm text-navy-950 leading-tight">{result.label}</h4>
       </div>
       <p className="text-[11px] text-steel-500 mb-2">
-        {result.address}
+        {result.address ?? `${result.lat.toFixed(4)}, ${result.lng.toFixed(4)}`}
       </p>
 
       {/* Confidence bar */}
@@ -1037,7 +1043,7 @@ function ResultDetailPanel({
           </div>
           <div className="flex-1 min-w-0">
             <h3 className="text-sm font-bold text-ice-100">{result.label}</h3>
-            <p className="text-[10px] text-steel-500 mt-0.5">{result.address}</p>
+            <p className="text-[10px] text-steel-500 mt-0.5">{result.address ?? `${result.lat.toFixed(4)}, ${result.lng.toFixed(4)}`}</p>
             <div className="flex items-center gap-2 mt-1.5">
               <span
                 className="text-[9px] px-1.5 py-0.5 rounded font-medium"

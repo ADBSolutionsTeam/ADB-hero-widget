@@ -40,7 +40,7 @@ export function createScanArea(lat: number, lng: number): ScanArea {
   };
 }
 
-/** Convert bounds to GeoJSON polygon for Mapbox */
+/** Convert bounds to GeoJSON polygon for Mapbox (counterclockwise per RFC 7946) */
 export function boundsToGeoJSON(bounds: ScanBounds) {
   return {
     type: "Feature" as const,
@@ -49,11 +49,11 @@ export function boundsToGeoJSON(bounds: ScanBounds) {
       type: "Polygon" as const,
       coordinates: [
         [
-          [bounds.west, bounds.north],
-          [bounds.east, bounds.north],
-          [bounds.east, bounds.south],
           [bounds.west, bounds.south],
+          [bounds.east, bounds.south],
+          [bounds.east, bounds.north],
           [bounds.west, bounds.north],
+          [bounds.west, bounds.south],
         ],
       ],
     },
@@ -81,11 +81,11 @@ export function tilesToGeoJSON(bounds: ScanBounds) {
           type: "Polygon" as const,
           coordinates: [
             [
-              [west, north],
-              [east, north],
-              [east, south],
               [west, south],
+              [east, south],
+              [east, north],
               [west, north],
+              [west, south],
             ],
           ],
         },
@@ -120,7 +120,7 @@ export function buildProgressSteps(): ScanProgressStep[] {
 // ── Mock result generation ──────────────────────────────────────────
 
 function seededRand(seed: number): () => number {
-  let s = seed;
+  let s = Math.abs(seed) || 1; // ensure positive non-zero
   return () => {
     s = (s * 16807 + 7) % 2147483647;
     return (s & 0x7fffffff) / 0x7fffffff;

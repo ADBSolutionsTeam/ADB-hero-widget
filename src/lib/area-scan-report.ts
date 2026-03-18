@@ -74,9 +74,10 @@ export function generateAreaScanReport(
     hour: "2-digit",
     minute: "2-digit",
   });
+  const lngDir = scanArea.center.lng >= 0 ? "E" : "W";
   const locStr = locationInfo
     ? `${locationInfo.city}, ${locationInfo.state} ${locationInfo.zip}`
-    : `${scanArea.center.lat.toFixed(4)}°N, ${Math.abs(scanArea.center.lng).toFixed(4)}°W`;
+    : `${scanArea.center.lat.toFixed(4)}°N, ${Math.abs(scanArea.center.lng).toFixed(4)}°${lngDir}`;
   doc.text(`${locStr}  |  ${dateStr}`, margin, 40);
 
   y = 58;
@@ -306,22 +307,20 @@ export function generateAreaScanReport(
 
   // ── Recommended Actions Page ───────────────────────────────
 
-  doc.addPage();
-  y = 20;
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(13);
-  setColor(doc, NAVY);
-  doc.text("Recommended Actions", margin, y);
-  y += 4;
-
   // Group by priority
   const highPriority = results.filter((r) => r.confidence > 0.88);
   const medPriority = results.filter((r) => r.confidence > 0.75 && r.confidence <= 0.88);
-
   const actionItems = [...highPriority, ...medPriority].slice(0, 15);
 
   if (actionItems.length > 0) {
+    doc.addPage();
+    y = 20;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(13);
+    setColor(doc, NAVY);
+    doc.text("Recommended Actions", margin, y);
+    y += 4;
     const actionData = actionItems.map((r) => {
       const detail = getResultDetail(r);
       return [
@@ -423,25 +422,27 @@ export function generateAreaScanCSV(
     "Report Date",
   ];
 
+  const esc = (v: string) => `"${v.replace(/"/g, '""')}"`;
+
   const rows = results.map((r) => {
     const detail = getResultDetail(r);
     return [
-      `"${r.label}"`,
-      r.category,
-      r.group,
+      esc(r.label),
+      esc(r.category),
+      esc(r.group),
       Math.round(r.confidence * 100),
-      detail.priority,
-      `"${detail.condition}"`,
+      esc(detail.priority),
+      esc(detail.condition),
       r.opportunityScore ?? "",
-      `"${r.address ?? ""}"`,
+      esc(r.address ?? ""),
       r.lat.toFixed(6),
       r.lng.toFixed(6),
       r.tileId,
-      `"${detail.actionLabel}"`,
+      esc(detail.actionLabel),
       scanArea.center.lat.toFixed(6),
       scanArea.center.lng.toFixed(6),
-      locationInfo?.city ?? "",
-      locationInfo?.state ?? "",
+      esc(locationInfo?.city ?? ""),
+      esc(locationInfo?.state ?? ""),
       new Date().toISOString().split("T")[0],
     ];
   });

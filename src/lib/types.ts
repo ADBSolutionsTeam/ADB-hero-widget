@@ -58,7 +58,6 @@ export interface ScanArea {
 
 export type ScanStage =
   | "idle"
-  | "selecting"
   | "selected"
   | "scanning"
   | "complete";
